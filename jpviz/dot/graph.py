@@ -6,6 +6,31 @@ import pydot
 from . import styling, utils
 
 
+def _get_arguments(
+    x: jax_core.JaxprEqn,
+    graph_id: str,
+    show_avals: bool,
+) -> typing.Tuple[pydot.Subgraph, typing.List]:
+    argument_nodes = pydot.Subgraph(f"{graph_id}_args", rank="same")
+    argument_edges = list()
+
+    for (va, vb) in zip(x.invars, x.params["jaxpr"].jaxpr.invars):
+        arg_id = f"{graph_id}_{vb}"
+        is_literal = isinstance(va, jax_core.Literal)
+        style = styling.LITERAL_STYLING if is_literal else styling.IN_ARG_STYLING
+        argument_nodes.add_node(
+            pydot.Node(
+                name=arg_id,
+                label=utils.get_node_label(vb, show_avals),
+                **style,
+            )
+        )
+        if not is_literal:
+            argument_edges.append((va, arg_id))
+
+    return argument_nodes, argument_edges
+
+
 def _add_arguments(
     graph: pydot.Subgraph,
     graph_id: str,
@@ -223,45 +248,6 @@ def _add_node(
     return graph, n + 1
 
 
-def _get_arguments(
-    x: jax_core.JaxprEqn,
-    graph_id: str,
-    show_avals: bool,
-) -> typing.Tuple[pydot.Subgraph, typing.List]:
-    """
-    Get a list of argument nodes and outer edges
-
-    Parameters
-    ----------
-    x: JaxprEqn
-    graph_id: str
-        Id of the function graph
-    show_avals: bool
-        If `True` types will be included in the node label
-
-    Returns
-    -------
-    (list, list)
-        List of nodes to be added to the graph, and list
-        of external edges linking to the parent graph
-    """
-
-    argument_nodes = pydot.Subgraph(f"{graph_id}_args", rank="same")
-    argument_edges = list()
-
-    for (va, vb) in zip(x.invars, x.params["jaxpr"].jaxpr.invars):
-        argument_nodes.add_node(
-            pydot.Node(
-                name=f"{graph_id}_{vb}",
-                label=utils.get_node_label(vb, show_avals),
-                **styling.IN_ARG_STYLING,
-            )
-        )
-        argument_edges.append((va, f"{graph_id}_{vb}"))
-
-    return argument_nodes, argument_edges
-
-
 def _get_outputs(
     x: jax_core.JaxprEqn,
     graph_id: str,
@@ -299,6 +285,28 @@ def _get_outputs(
         output_edges.append((va, f"{graph_id}_{vb}", va))
 
     return output_nodes, output_edges
+
+
+def _insert_argument_edges(
+    graph: pydot.Subgraph,
+    in_edges: typing.List[typing.Tuple],
+    out_edges: typing.List[typing.Tuple],
+    show_avals: bool,
+):
+    graph_id = graph.get_name()
+    for (a, b) in in_edges:
+        graph.add_edge(pydot.Edge(f"{graph_id}_{a}", b))
+    for (a, b, c) in out_edges:
+        graph.add_node(
+            pydot.Node(
+                name=f"{graph_id}_{a}",
+                label=utils.get_node_label(a, show_avals),
+                **styling.VAR_STYLING,
+            )
+        )
+        graph.add_edge(pydot.Edge(b, f"{graph_id}_{c}"))
+
+    return graph
 
 
 def sub_graph(
@@ -351,17 +359,7 @@ def sub_graph(
                     eqn, n, collapse_primitives, show_avals
                 )
                 graph.add_subgraph(_sub_graph)
-                for (a, b) in in_edges:
-                    graph.add_edge(pydot.Edge(f"{graph_id}_{a}", b))
-                for (a, b, c) in out_edges:
-                    graph.add_node(
-                        pydot.Node(
-                            name=f"{graph_id}_{a}",
-                            label=utils.get_node_label(a, show_avals),
-                            **styling.VAR_STYLING,
-                        )
-                    )
-                    graph.add_edge(pydot.Edge(b, f"{graph_id}_{c}"))
+                graph = _insert_argument_edges(graph, in_edges, out_edges, show_avals)
             else:
                 graph, n = _add_node(
                     eqn,
