@@ -51,42 +51,43 @@ def _get_subgraph(graph_id: str, label: str) -> pydot.Subgraph:
 
 
 def _get_arguments(
-    x: jax_core.JaxprEqn,
     graph_id: str,
     parent_id: str,
+    graph_invars: typing.List[jax_core.Var],
+    parent_invars: typing.List[jax_core.Var],
     show_avals: bool,
-) -> typing.Tuple[pydot.Subgraph, typing.List]:
+) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
     argument_nodes = pydot.Subgraph(f"{graph_id}_args", rank="same")
     argument_edges = list()
 
-    for (va, vb) in zip(x.invars, x.params["jaxpr"].jaxpr.invars):
-        arg_id = f"{graph_id}_{vb}"
-        is_literal = isinstance(va, jax_core.Literal)
-        argument_nodes.add_node(_get_arg_node(arg_id, vb, show_avals, is_literal))
+    for var, p_var in zip(graph_invars, parent_invars):
+        arg_id = f"{graph_id}_{var}"
+        is_literal = isinstance(var, jax_core.Literal)
+        argument_nodes.add_node(_get_arg_node(arg_id, var, show_avals, is_literal))
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{va}", arg_id))
+            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
 
     return argument_nodes, argument_edges
 
 
 def _get_outputs(
-    x: jax_core.JaxprEqn,
     graph_id: str,
     parent_id: str,
+    graph_outvars: typing.List[jax_core.Var],
+    parent_outvars: typing.List[jax_core.Var],
     show_avals: bool,
 ) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge], typing.List[pydot.Node]]:
-
-    output_nodes = pydot.Subgraph(f"{graph_id}_outputs")
-    output_edges = list()
+    out_graph = pydot.Subgraph(f"{graph_id}_outs", rank="same")
+    out_edges = list()
     out_nodes = list()
 
-    for (va, vb) in zip(x.outvars, x.params["jaxpr"].jaxpr.outvars):
-        out_id = f"{graph_id}_{vb}"
-        output_nodes.add_node(_get_out_node(out_id, vb, show_avals))
-        output_edges.append(pydot.Edge(out_id, f"{parent_id}_{va}"))
-        out_nodes.append(_get_var_node(f"{parent_id}_{va}", va, show_avals))
+    for var, p_var in zip(graph_outvars, parent_outvars):
+        arg_id = f"{graph_id}_{var}"
+        out_graph.add_node(_get_out_node(arg_id, var, show_avals))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
+        out_nodes.append(_get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
 
-    return output_nodes, output_edges, out_nodes
+    return out_graph, out_edges, out_nodes
 
 
 def get_conditional(
@@ -184,17 +185,16 @@ def get_conditional(
             branch_label = f"Branch {i}: λ"
             if utils.contains_non_primitives(branch.eqns) or not collapse_primitives:
                 branch_graph = _get_subgraph(f"cluster_{branch_graph_id}", branch_label)
-                branch_args = pydot.Subgraph(f"{branch_graph_id}_args", rank="same")
-                for var in branch.jaxpr.invars:
-                    arg_id = f"{branch_graph_id}_{var}"
-                    is_literal = isinstance(arg, jax_core.Literal)
-                    branch_args.add_node(
-                        _get_arg_node(arg_id, var, show_avals, is_literal)
-                    )
-                    if not is_literal:
-                        cond_graph.add_edge(
-                            pydot.Edge(f"{cond_graph_id}_{var}", arg_id)
-                        )
+
+                branch_args, arg_edges = _get_arguments(
+                    branch_graph_id,
+                    cond_graph_id,
+                    branch.jaxpr.invars,
+                    branch.jaxpr.invars,
+                    show_avals,
+                )
+                for edge in arg_edges:
+                    cond_graph.add_edge(edge)
                 branch_graph.add_subgraph(branch_args)
 
                 for eqn in branch.eqns:
@@ -222,12 +222,18 @@ def get_conditional(
                     for edge in eqn_out_edges:
                         branch_graph.add_edge(edge)
 
-                branch_outs = pydot.Subgraph(f"{branch_graph_id}_outs", rank="same")
-                for var, c_var in zip(branch.jaxpr.outvars, conditional.outvars):
-                    arg_id = f"{branch_graph_id}_{var}"
-                    branch_outs.add_node(_get_out_node(arg_id, var, show_avals))
-                    cond_graph.add_edge(pydot.Edge(arg_id, f"{cond_graph_id}_{c_var}"))
-                branch_graph.add_subgraph(branch_outs)
+                branch_out_graph, branch_out_edges, branch_out_nodes = _get_outputs(
+                    branch_graph_id,
+                    cond_graph_id,
+                    branch.jaxpr.outvars,
+                    conditional.outvars,
+                    show_avals,
+                )
+                branch_graph.add_subgraph(branch_out_graph)
+                for edge in branch_out_edges:
+                    cond_graph.add_edge(edge)
+                for node in branch_out_nodes:
+                    cond_graph.add_node(node)
 
                 cond_graph.add_subgraph(branch_graph)
             else:
@@ -247,14 +253,16 @@ def get_conditional(
                         pydot.Edge(branch_graph_id, f"{cond_graph_id}_{var}")
                     )
 
-    cond_outputs = pydot.Subgraph(f"{cond_graph_id}_outputs", rank="same")
-    for arg in conditional.outvars:
-        arg_id = f"{cond_graph_id}_{arg}"
-        cond_outputs.add_node(_get_out_node(arg_id, arg, show_avals))
-        new_nodes.append(_get_var_node(arg_id, arg, show_avals))
-        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{arg}"))
-
-    cond_graph.add_subgraph(cond_outputs)
+    cond_out_graph, cond_out_edges, cond_out_nodes = _get_outputs(
+        cond_graph_id,
+        parent_id,
+        conditional.outvars,
+        conditional.outvars,
+        show_avals,
+    )
+    cond_graph.add_subgraph(cond_out_graph)
+    out_edges.extend(cond_out_edges)
+    new_nodes.extend(cond_out_nodes)
 
     return cond_graph, in_edges, new_nodes, out_edges, n
 
@@ -322,7 +330,11 @@ def get_sub_graph(
             )
 
             argument_nodes, argument_edges = _get_arguments(
-                eqn, graph_id, parent_id, show_avals
+                graph_id,
+                parent_id,
+                eqn.params["jaxpr"].jaxpr.invars,
+                eqn.invars,
+                show_avals,
             )
             graph.add_subgraph(argument_nodes)
 
@@ -342,8 +354,13 @@ def get_sub_graph(
                     graph.add_edge(edge)
 
             output_nodes, out_edges, out_nodes = _get_outputs(
-                eqn, graph_id, parent_id, show_avals
+                graph_id,
+                parent_id,
+                eqn.params["jaxpr"].jaxpr.outvars,
+                eqn.outvars,
+                show_avals,
             )
+
             graph.add_subgraph(output_nodes)
 
             return graph, argument_edges, out_nodes, out_edges, n
