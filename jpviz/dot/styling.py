@@ -29,10 +29,10 @@ VAR_STYLING = dict(
     fontsize="10",
 )
 PRIMITIVE_STYLING = dict(
-    shape="oval",
+    shape="box",
     fontname="Courier",
     fontsize="10",
-    linestye="dashed",
+    style="dashed",
 )
 COND_NODE_STYLING = dict(
     shape="box",

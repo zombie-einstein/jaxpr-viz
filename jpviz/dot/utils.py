@@ -43,18 +43,5 @@ def is_not_primitive(x: jax_core.JaxprEqn) -> bool:
     return "jaxpr" in x.params
 
 
-def contains_non_primitives(x: jax_core.JaxprEqn) -> bool:
-    """
-    Check if a JaxprEqn itself contains any non-primitive nodes.
-
-    Parameters
-    ----------
-    x : JaxPr
-
-    Returns
-    -------
-    bool
-        `True` if any sub nodes are non-primitive
-    """
-    eqns = [e for e in x.params["jaxpr"].jaxpr.eqns]
-    return any(["jaxpr" in e.params for e in eqns])
+def contains_non_primitives(eqns: typing.List[jax_core.JaxprEqn]) -> bool:
+    return any([("jaxpr" in e.params or e.primitive.name == "cond") for e in eqns])

@@ -27,7 +27,12 @@ def draw_dot_graph(
 
     g = pydot.Dot(graph_type="digraph")
 
-    sub_graph, _, _, _ = graph.sub_graph(x.eqns[0], 0, collapse_primitives, show_avals)
-    g.add_subgraph(sub_graph)
+    sub_graph, _, _, _, _ = graph.get_sub_graph(
+        x.eqns[0], "", 0, collapse_primitives, show_avals
+    )
+    if isinstance(sub_graph, pydot.Subgraph):
+        g.add_subgraph(sub_graph)
+    else:
+        g.add_node(sub_graph)
 
     return g
