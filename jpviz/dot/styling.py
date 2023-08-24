@@ -32,12 +32,13 @@ PRIMITIVE_STYLING = dict(
     shape="box",
     fontname="Courier",
     fontsize="10",
-    style="dashed",
+    color="grey",
 )
 COND_NODE_STYLING = dict(
     shape="box",
     fontname="Courier",
     fontsize="10",
+    color="grey",
 )
 FUNCTION_NODE_STYLING = dict(
     shape="rectangle", fontname="Courier", fontsize="10", style="dotted"
