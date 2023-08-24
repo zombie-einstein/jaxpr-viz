@@ -114,13 +114,13 @@ def get_conditional(
 ) -> sub_graph_return:
 
     cond_graph_id = f"{parent_id}_cond_{n}"
-    cond_graph = _get_subgraph(f"cluster_{cond_graph_id}", "cond")
+    cond_graph = _get_subgraph(f"cluster_{cond_graph_id}", "switch")
     n = n + 1
 
     cond_node_id = f"{cond_graph_id}_node"
     cond_arguments = pydot.Subgraph(f"{cond_graph_id}_inputs", rank="same")
     cond_arguments.add_node(
-        pydot.Node(name=cond_node_id, label="cond", **styling.COND_NODE_STYLING)
+        pydot.Node(name=cond_node_id, label="idx", **styling.COND_NODE_STYLING)
     )
 
     in_edges = list()
