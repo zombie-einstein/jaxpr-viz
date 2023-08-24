@@ -153,6 +153,9 @@ def get_conditional(
                     )
                 )
                 for var in branch.jaxpr.invars:
+                    # TODO: What does the underscore mean?
+                    if str(var)[-1] == "_":
+                        continue
                     cond_graph.add_edge(
                         pydot.Edge(f"{cond_graph_id}_{var}", branch_graph_id)
                     )
@@ -268,6 +271,9 @@ def get_conditional(
                     )
                 )
                 for var in branch.jaxpr.invars:
+                    # TODO: What does the underscore mean?
+                    if str(var)[-1] == "_":
+                        continue
                     cond_graph.add_edge(
                         pydot.Edge(f"{cond_graph_id}_{var}", branch_graph_id)
                     )
