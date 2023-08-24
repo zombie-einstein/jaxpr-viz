@@ -61,6 +61,9 @@ def _get_arguments(
     argument_edges = list()
 
     for var, p_var in zip(graph_invars, parent_invars):
+        # TODO: What does the underscore mean?
+        if str(var)[-1] == "_":
+            continue
         arg_id = f"{graph_id}_{var}"
         is_literal = isinstance(var, jax_core.Literal)
         argument_nodes.add_node(_get_arg_node(arg_id, var, show_avals, is_literal))
