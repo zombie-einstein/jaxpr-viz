@@ -3,7 +3,7 @@ import typing
 import jax
 import pydot
 
-from .draw_dot import draw_dot_graph
+from .dot import draw_dot_graph
 
 
 def draw(f, collapse_primitives=True, show_avals=True) -> typing.Callable:
