@@ -7,17 +7,59 @@ import pydot
 from . import graph_utils, styling, utils
 
 sub_graph_return = typing.Tuple[
-    typing.Union[pydot.Node, pydot.Subgraph], typing.List, typing.List, typing.List, int
+    typing.Union[pydot.Node, pydot.Subgraph],
+    typing.List[pydot.Edge],
+    typing.List[pydot.Node],
+    typing.List[pydot.Edge],
+    int,
 ]
 
 
 def get_conditional(
-    conditional,
+    conditional: jax_core.Jaxpr,
     parent_id: str,
     collapse_primitives: bool,
     show_avals: bool,
     n: int,
 ) -> sub_graph_return:
+    """
+    Generate a subgraph representing a conditional function
+
+    Parameters
+    ----------
+    conditional: jax._src.core.Jaxpr
+        Jaxpr of the conditional function
+    parent_id: str
+        ID of the parent subgraph of the conditional node
+    collapse_primitives: bool
+        If `True` any subgraph only consisting of primitive
+        functions is collapsed into a single node
+    show_avals: bool
+        If `True` the type of the data is shown on
+        argument/variable nodes on the generated graph
+    n: int
+        Integer used to generate unique ids for nodes, incremented
+        as new nodes are added
+
+    Returns
+    -------
+    (
+        typing.Union[pydot.Node, pydot.Subgraph],
+        typing.List[pydot.Edge],
+        typing.List[pydot.Node],
+        typing.List[pydot.Edge],
+        int
+    )
+        Tuple containing:
+            - Subgraph representing the conditional function and branches
+            - List of edges that will connect a parent graph to the
+              arguments of the conditional function
+            - List of nodes that should be added to a parent graph (i.e.
+              outputs of this graph)
+            - List of edges connecting the outputs of this graph to
+              parent graph
+            - Updated incremented integer used to get unique node ids
+    """
 
     cond_graph_id = f"{parent_id}_cond_{n}"
     cond_graph = graph_utils.get_subgraph(f"cluster_{cond_graph_id}", "switch")
@@ -212,14 +254,52 @@ def get_conditional(
 
 
 def _get_node(
-    x: jax_core.JaxprEqn,
+    eqn: jax_core.JaxprEqn,
     graph_id: str,
     show_avals: bool,
     n: int,
     is_primitive: bool,
 ) -> sub_graph_return:
+    """
+    Generate a node representing a function and edges connecting it
+    to a parent graph
 
-    name = str(x.primitive) if is_primitive else x.params["name"]
+    Parameters
+    ----------
+    eqn: jax._src.core.JaxprEqn
+        JaxprEqn of the function
+    graph_id: str
+        Id of the computation graph containing this node
+    show_avals: bool
+        If `True` the type of the data is shown on
+        argument/variable nodes on the generated graph
+    n: int
+        Integer used to generate unique ids for nodes, incremented
+        as new nodes are added
+    is_primitive: bool
+        Should be `True` if the function is a JAX primitive
+
+    Returns
+    -------
+    (
+        typing.Union[pydot.Node, pydot.Subgraph],
+        typing.List[pydot.Edge],
+        typing.List[pydot.Node],
+        typing.List[pydot.Edge],
+        int
+    )
+        Tuple containing:
+            - Node representing the function
+            - List of edges that will connect a parent graph to the
+              arguments of the function
+            - List of nodes that should be added to a parent graph (i.e.
+              outputs of this graph)
+            - List of edges connecting the outputs of this node to
+              parent graph
+            - Updated incremented integer used to get unique node ids
+    """
+
+    name = str(eqn.primitive) if is_primitive else eqn.params["name"]
     node_id = f"{name}_{n}"
     n = n + 1
 
@@ -230,14 +310,14 @@ def _get_node(
     in_edges = list()
     out_edges = list()
 
-    for var in x.invars:
+    for var in eqn.invars:
         if isinstance(var, jax_core.Literal):
             new_nodes.append(
                 graph_utils.get_arg_node(f"{graph_id}_{var}", var, show_avals, True)
             )
         in_edges.append(pydot.Edge(f"{graph_id}_{var}", node_id))
 
-    for var in x.outvars:
+    for var in eqn.outvars:
         new_nodes.append(
             pydot.Node(
                 name=f"{graph_id}_{var}",
@@ -257,6 +337,48 @@ def get_sub_graph(
     collapse_primitives: bool,
     show_avals: bool,
 ) -> sub_graph_return:
+    """
+    Generate a node/subgraph representing a function
+
+    The returned node/subgraph is conditional on the function
+    type. This function recursively walks nodes on the graph
+    of this function to generate sub-graphs of sub-functions
+
+    Parameters
+    ----------
+    eqn: jax._src.core.JaxprEqn
+        JaxprEqn of the function
+    parent_id: str
+        ID of the
+    n: int
+        Integer used to generate unique ids for nodes, incremented
+        as new nodes are added
+    collapse_primitives: bool
+        If `True` any subgraph only consisting of primitive
+        functions is collapsed into a single node
+    show_avals: bool
+        If `True` the type of the data is shown on
+        argument/variable nodes on the generated graph
+
+    Returns
+    -------
+    (
+        typing.Union[pydot.Node, pydot.Subgraph],
+        typing.List[pydot.Edge],
+        typing.List[pydot.Node],
+        typing.List[pydot.Edge],
+        int
+    )
+        Tuple containing:
+            - Subgraph or node representing the function
+            - List of edges that will connect a parent graph to the
+              arguments of the function
+            - List of nodes that should be added to a parent graph (i.e.
+              outputs of this graph)
+            - List of edges connecting the outputs of this node to
+              parent graph
+            - Updated incremented integer used to get unique node ids
+    """
 
     if utils.is_not_primitive(eqn):
         if (
