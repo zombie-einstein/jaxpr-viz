@@ -5,14 +5,14 @@ from . import graph
 
 
 def draw_dot_graph(
-    x: jax_core.ClosedJaxpr, collapse_primitives: bool, show_avals: bool
+    fn: jax_core.ClosedJaxpr, collapse_primitives: bool, show_avals: bool
 ) -> pydot.Graph:
     """
     Generate a pydot representation of an XLA graph
 
     Parameters
     ----------
-    x : ClosedJaxpr
+    fn : ClosedJaxpr
     collapse_primitives: bool
         If `True` functions that are composed of only primitive
         values will be collapsed
@@ -28,7 +28,7 @@ def draw_dot_graph(
     g = pydot.Dot(graph_type="digraph")
 
     sub_graph, _, _, _, _ = graph.get_sub_graph(
-        x.eqns[0], "", 0, collapse_primitives, show_avals
+        fn.eqns[0], "", 0, collapse_primitives, show_avals
     )
     if isinstance(sub_graph, pydot.Subgraph):
         g.add_subgraph(sub_graph)
