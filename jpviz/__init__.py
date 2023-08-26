@@ -39,7 +39,9 @@ def draw(f, collapse_primitives=True, show_avals=True) -> typing.Callable:
     f:
         JAX jit compiled function
     collapse_primitives: bool
-        If
+        If `True` sub-functions that contain only JAX primitives
+        will be collapsed into a single node in the generated
+        graph
     show_avals: bool
         If `True` then type information will be
         included on node labels
