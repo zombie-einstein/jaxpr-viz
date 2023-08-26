@@ -23,7 +23,7 @@ Install with pip:
 pip install jpviz
 ```
 
-Dependent on your system you may also need to install [https://www.graphviz.org/]
+Dependent on your system you may also need to install (Graphviz)[https://www.graphviz.org/]
 
 ## Usage
 
