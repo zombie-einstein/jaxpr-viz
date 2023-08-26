@@ -10,9 +10,10 @@ repository = "https://github.com/zombie-einstein/jaxpr-viz"
 keywords = ["JAX", "Computation Graph"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.9,<3.13"
 jax = "^0.4.14"
 pydot = "^1.4.2"
+scipy = "^1.10.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.3"
