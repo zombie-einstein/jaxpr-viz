@@ -67,7 +67,7 @@ Pydot has a number of options for rendering graphs, see
 > need to be marked with `@jax.jit`, otherwise they will just
 > merged into thir parent graph.
 
-#### Jupyter Notebook
+### Jupyter Notebook
 
 To show the rendered graph in a jupyter notebook you can use the
 helper function `view_pydot`
