@@ -28,11 +28,17 @@ Dependent on your system you may also need to install [Graphviz](https://www.gra
 ## Usage
 
 Jaxpr-viz can be used to visualise jit compiled (and nested)
-functions, for example with the functions
+functions. It wraps jit compiled functions, which when called
+with concrete values returns a [pydot](https://github.com/pydot/pydot)
+graph.
+
+For example this simple computation graph
 
 ```python
 import jax
 import jax.numpy as jnp
+
+import jpviz
 
 @jax.jit
 def foo(x):
@@ -42,23 +48,35 @@ def foo(x):
 def bar(x):
     x = foo(x)
     return x - 1
+
+# Wrap function and call with concrete arguments
+#  here dot_graph is a pydot object
+dot_graph = jpviz.draw(bar)(jnp.arange(10))
+# This renders the graph to a png file
+dot_graph.write_png("computation_graph.png")
 ```
 
-jaxpr-viz wraps functions, which can then be called
-with concrete arguments
-
-```python
-import jpviz
-
-jpviz.draw(bar)(jnp.arange(10))
-```
-
-produces
+produces this image
 
 ![bar computation graph](.github/images/bar_collapsed.png)
 
+Pydot has a number of options for rendering graphs, see
+[here](https://github.com/pydot/pydot#output).
+
 > **NOTE:** For sub-functions to show as nodes/sub-graphs they
-> need to be marked with `@jax.jit`
+> need to be marked with `@jax.jit`, otherwise they will just
+> merged into thir parent graph.
+
+### Jupyter Notebook
+
+To show the rendered graph in a jupyter notebook you can use the
+helper function `view_pydot`
+
+```python
+...
+dot_graph = jpviz.draw(bar)(jnp.arange(10))
+jpviz.view_pydot(dot)
+```
 
 ### Visualisation Options
 
@@ -66,12 +84,12 @@ produces
 By default, functions that are composed of only primitive functions
 are collapsed into a single node (like `foo` in the above example).
 The full computation graph can be rendered using the `collapse_primitives`
-flag
+flag, setting it to `False` in the above example
 
 ```python
-import jpviz
-
-jpviz.draw(bar, collapse_primitives=True)(jnp.arange(10))
+...
+dot_graph = jpviz.draw(bar, collapse_primitives=False)(jnp.arange(10))
+...
 ```
 
 produces
@@ -81,27 +99,22 @@ produces
 #### Show Types
 
 By default, type information is included in the node labels, this
-can be hidden using the `show_avals` flag
+can be hidden using the `show_avals` flag, setting it to `False`
 
 ```python
-import jpviz
-
-jpviz.draw(bar, show_avals=False)(jnp.arange(10))
+...
+dot_graph = jpviz.draw(bar, show_avals=False)(jnp.arange(10))
+...
 ```
 
 produces
 
 ![bar computation graph](.github/images/bar_no_types.png "Title")
 
-#### Jupyter Notebook
-
-To show the rendered graph in a jupyter notebook you can use the
-helper function `view_pydot`
-
-```python
-dot = jpviz.draw(bar, collapse_primitives=True)(jnp.arange(10))
-jpviz.view_pydot(dot)
-```
+> **NOTE:** The labels of the nodes don't currently correspond
+> to argument/variable names in the original Python code. Since
+> JAX unpacks arguments/outputs to tuples they do correspond
+> to the positioning of arguments and outputs.
 
 ## Developers
 
