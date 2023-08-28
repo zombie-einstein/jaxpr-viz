@@ -73,6 +73,7 @@ To show the rendered graph in a jupyter notebook you can use the
 helper function `view_pydot`
 
 ```python
+...
 dot_graph = jpviz.draw(bar)(jnp.arange(10))
 jpviz.view_pydot(dot)
 ```
@@ -86,7 +87,9 @@ The full computation graph can be rendered using the `collapse_primitives`
 flag, setting it to `False` in the above example
 
 ```python
+...
 dot_graph = jpviz.draw(bar, collapse_primitives=False)(jnp.arange(10))
+...
 ```
 
 produces
@@ -99,7 +102,9 @@ By default, type information is included in the node labels, this
 can be hidden using the `show_avals` flag, setting it to `False`
 
 ```python
+...
 dot_graph = jpviz.draw(bar, show_avals=False)(jnp.arange(10))
+...
 ```
 
 produces
