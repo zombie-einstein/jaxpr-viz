@@ -40,7 +40,7 @@ def is_not_primitive(x: jax_core.JaxprEqn) -> bool:
     bool
         'True' if not a primitive.
     """
-    return "jaxpr" in x.params
+    return x.primitive.name == "pjit"
 
 
 def contains_non_primitives(eqns: typing.List[jax_core.JaxprEqn]) -> bool:
