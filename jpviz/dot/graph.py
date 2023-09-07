@@ -330,6 +330,107 @@ def _get_node(
     return node, in_edges, new_nodes, out_edges, n
 
 
+def expand_non_primitive(
+    eqn: jax_core.JaxprEqn,
+    parent_id: str,
+    n: int,
+    collapse_primitives: bool,
+    show_avals: bool,
+    is_scan: bool = False,
+) -> sub_graph_return:
+    # Recursively return a subgraph
+    graph_name = eqn.params["name"] if "name" in eqn.params else eqn.primitive.name
+    graph_id = f"{graph_name}_{n}"
+    n = n + 1
+
+    graph = pydot.Subgraph(
+        f"cluster_{graph_id}",
+        rank="same",
+        label=graph_name,
+        **styling.GRAPH_STYLING,
+    )
+
+    if is_scan:
+        argument_nodes, argument_edges = graph_utils.get_scan_arguments(
+            graph_id,
+            parent_id,
+            eqn.params["jaxpr"].jaxpr.invars,
+            eqn.invars,
+            eqn.params["num_consts"],
+            eqn.params["num_carry"],
+            show_avals,
+        )
+    else:
+        argument_nodes, argument_edges = graph_utils.get_arguments(
+            graph_id,
+            parent_id,
+            eqn.params["jaxpr"].jaxpr.invars,
+            eqn.invars,
+            show_avals,
+        )
+    graph.add_subgraph(argument_nodes)
+
+    for sub_eqn in eqn.params["jaxpr"].jaxpr.eqns:
+        sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
+            sub_eqn, graph_id, n, collapse_primitives, show_avals
+        )
+        if isinstance(sub_graph, pydot.Subgraph):
+            graph.add_subgraph(sub_graph)
+        else:
+            graph.add_node(sub_graph)
+        for edge in in_edges:
+            graph.add_edge(edge)
+        for node in out_nodes:
+            graph.add_node(node)
+        for edge in out_edges:
+            graph.add_edge(edge)
+
+    if is_scan:
+        output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_scan_outputs(
+            graph_id,
+            parent_id,
+            eqn.params["jaxpr"].jaxpr.invars,
+            eqn.params["jaxpr"].jaxpr.outvars,
+            eqn.outvars,
+            eqn.params["num_carry"],
+            show_avals,
+        )
+    else:
+        output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_outputs(
+            graph_id,
+            parent_id,
+            eqn.params["jaxpr"].jaxpr.invars,
+            eqn.params["jaxpr"].jaxpr.outvars,
+            eqn.outvars,
+            show_avals,
+        )
+
+    graph.add_subgraph(output_nodes)
+    for edge in id_edges:
+        graph.add_edge(edge)
+
+    return graph, argument_edges, out_nodes, out_edges, n
+
+
+def get_scan(
+    eqn: jax_core.JaxprEqn,
+    parent_id: str,
+    n: int,
+    collapse_primitives: bool,
+    show_avals: bool,
+) -> sub_graph_return:
+    graph, argument_edges, out_nodes, out_edges, n = expand_non_primitive(
+        eqn,
+        parent_id,
+        n,
+        collapse_primitives,
+        show_avals,
+        is_scan=True,
+    )
+    graph.set_label(f"scan ({eqn.params['length']})")
+    return graph, argument_edges, out_nodes, out_edges, n
+
+
 def get_sub_graph(
     eqn: jax_core.JaxprEqn,
     parent_id: str,
@@ -385,56 +486,13 @@ def get_sub_graph(
             utils.contains_non_primitives(eqn.params["jaxpr"].jaxpr.eqns)
             or not collapse_primitives
         ):
-            # Recursively return a subgraph
-            graph_name = eqn.params["name"]
-            graph_id = f"{graph_name}_{n}"
-            n = n + 1
-
-            graph = pydot.Subgraph(
-                f"cluster_{graph_id}",
-                rank="same",
-                label=graph_name,
-                **styling.GRAPH_STYLING,
-            )
-
-            argument_nodes, argument_edges = graph_utils.get_arguments(
-                graph_id,
+            return expand_non_primitive(
+                eqn,
                 parent_id,
-                eqn.params["jaxpr"].jaxpr.invars,
-                eqn.invars,
+                n,
+                collapse_primitives,
                 show_avals,
             )
-            graph.add_subgraph(argument_nodes)
-
-            for sub_eqn in eqn.params["jaxpr"].jaxpr.eqns:
-                sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
-                    sub_eqn, graph_id, n, collapse_primitives, show_avals
-                )
-                if isinstance(sub_graph, pydot.Subgraph):
-                    graph.add_subgraph(sub_graph)
-                else:
-                    graph.add_node(sub_graph)
-                for edge in in_edges:
-                    graph.add_edge(edge)
-                for node in out_nodes:
-                    graph.add_node(node)
-                for edge in out_edges:
-                    graph.add_edge(edge)
-
-            output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_outputs(
-                graph_id,
-                parent_id,
-                eqn.params["jaxpr"].jaxpr.invars,
-                eqn.params["jaxpr"].jaxpr.outvars,
-                eqn.outvars,
-                show_avals,
-            )
-
-            graph.add_subgraph(output_nodes)
-            for edge in id_edges:
-                graph.add_edge(edge)
-
-            return graph, argument_edges, out_nodes, out_edges, n
         else:
             # Return a node representing a function
             return _get_node(
@@ -448,6 +506,14 @@ def get_sub_graph(
         if eqn.primitive.name == "cond":
             # Return a conditional subgraph
             return get_conditional(eqn, parent_id, collapse_primitives, show_avals, n)
+        elif eqn.primitive.name == "scan":
+            return get_scan(
+                eqn,
+                parent_id,
+                n,
+                collapse_primitives,
+                show_avals,
+            )
         else:
             # Return a primitive node
             return _get_node(

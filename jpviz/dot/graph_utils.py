@@ -157,6 +157,68 @@ def get_arguments(
     return argument_nodes, argument_edges
 
 
+def get_scan_arguments(
+    graph_id: str,
+    parent_id: str,
+    graph_invars: typing.List[jax_core.Var],
+    parent_invars: typing.List[jax_core.Var],
+    n_const: int,
+    n_carry: int,
+    show_avals: bool,
+) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
+    """
+    Generate a subgraph containing arguments, and edges connecting
+    it to its parent graph. Groups scan init/carry nodes.
+
+    Parameters
+    ----------
+    graph_id: str
+        ID of the subgraph that owns the arguments
+    parent_id: str
+        ID of the parent of the subgraph
+    graph_invars: List[jax._src.core.Var]
+        List of input variables to the subgraph
+    parent_invars: List[jax._src.core.Var]
+        List of the corresponding input variables from the parent subgraph
+    n_const: int
+        Number of scan constant arguments
+    n_carry: int
+        Number of scan carry arguments
+    show_avals: bool
+        If `True` show the type in the node
+
+    Returns
+    -------
+    (pydot.Subgraph, typing.List[pydot.Edge])
+        Tuple containing the argument subgraph and a list of
+        edges that connect variables in the parent graph to
+        the inputs of this subgraph.
+    """
+    argument_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_args", rank="same", label="", style="invis"
+    )
+    carry_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_init", rank="same", label="init", style="dotted"
+    )
+    argument_edges = list()
+
+    for i, (var, p_var) in enumerate(zip(graph_invars, parent_invars)):
+        # TODO: What does the underscore mean?
+        if str(var)[-1] == "_":
+            continue
+        arg_id = f"{graph_id}_{var}"
+        is_literal = isinstance(var, jax_core.Literal)
+        if n_const <= i < n_carry:
+            carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
+        else:
+            argument_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
+        if not is_literal:
+            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
+
+    argument_nodes.add_subgraph(carry_nodes)
+    return argument_nodes, argument_edges
+
+
 def get_outputs(
     graph_id: str,
     parent_id: str,
@@ -222,4 +284,85 @@ def get_outputs(
         out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
         out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
 
+    return out_graph, out_edges, out_nodes, id_edges
+
+
+def get_scan_outputs(
+    graph_id: str,
+    parent_id: str,
+    graph_invars: typing.List[jax_core.Var],
+    graph_outvars: typing.List[jax_core.Var],
+    parent_outvars: typing.List[jax_core.Var],
+    n_carry: int,
+    show_avals: bool,
+) -> typing.Tuple[
+    pydot.Subgraph,
+    typing.List[pydot.Edge],
+    typing.List[pydot.Node],
+    typing.List[pydot.Edge],
+]:
+    """
+    Generate a subgraph containing function output nodes, and
+    edges and nodes that connect outputs to the parent graph.
+    Groups carry nodes.
+
+    Parameters
+    ----------
+    graph_id: str
+        ID of the subgraph
+    parent_id: str
+        ID of the parent graph
+    graph_invars: List[jax._src.core.Var]
+        List of funtion input variables
+    graph_outvars: List[jax._src.core.Var]
+        List of output function variables
+    parent_outvars: List[jax._src.core.Var]
+        Corresponding list of variable from the parent
+        graph that are outputs from this graph
+    n_carry: int
+        Number of scan carry arguments
+    show_avals: bool
+        If `True` show the type in the node
+
+    Returns
+    -------
+    (
+        pydot.Subgraph,
+        typing.List[pydot.Edge],
+        typing.List[pydot.Node],
+        typing.List[pydot.Edge]
+    )
+        Tuple containing:
+            - The subgraph wrapping the output nodes
+            - A list of edges connecting to the parent graph
+            - A list of variable nodes that should be added to the
+              parent graph (as outputs from this graph)
+            - A list of edges that connect inputs directly to outputs
+              in the case an argument is returned by the function
+    """
+    out_graph = pydot.Subgraph(
+        f"cluster_{graph_id}_outs", rank="same", label="", style="invis"
+    )
+    carry_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_carry", rank="same", label="carry", style="dotted"
+    )
+    out_edges = list()
+    out_nodes = list()
+    id_edges = list()
+    in_var_set = set([str(x) for x in graph_invars])
+
+    for i, (var, p_var) in enumerate(zip(graph_outvars, parent_outvars)):
+        if str(var) in in_var_set:
+            arg_id = f"{graph_id}_{var}_out"
+            id_edges.append(pydot.Edge(f"{graph_id}_{var}", arg_id))
+        else:
+            arg_id = f"{graph_id}_{var}"
+        if i < n_carry:
+            carry_nodes.add_node(get_out_node(arg_id, var, show_avals))
+        else:
+            out_graph.add_node(get_out_node(arg_id, var, show_avals))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
+        out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
+
+    out_graph.add_subgraph(carry_nodes)
     return out_graph, out_edges, out_nodes, id_edges
