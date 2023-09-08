@@ -207,11 +207,22 @@ def get_scan_arguments(
         if str(var)[-1] == "_":
             continue
         arg_id = f"{graph_id}_{var}"
-        is_literal = isinstance(var, jax_core.Literal)
-        if n_const <= i < n_carry:
-            carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
+
+        var_is_literal = isinstance(var, jax_core.Literal)
+        parent_is_literal = isinstance(p_var, jax_core.Literal)
+        is_literal = var_is_literal or parent_is_literal
+
+        if parent_is_literal:
+            literal_id = f"{arg_id}_lit"
+            argument_nodes.add_node(get_arg_node(literal_id, p_var, show_avals, True))
+            argument_nodes.add_edge(pydot.Edge(literal_id, arg_id))
+
+        if n_const <= i < n_carry + n_const:
+            carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
         else:
-            argument_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
+            argument_nodes.add_node(
+                get_arg_node(arg_id, var, show_avals, var_is_literal)
+            )
         if not is_literal:
             argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
 
