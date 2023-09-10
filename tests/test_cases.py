@@ -1,5 +1,8 @@
 import jax
 import jax.numpy as jnp
+import pytest
+
+import jpviz
 
 
 @jax.jit
@@ -84,3 +87,9 @@ test_cases = [
     (func10, [jnp.ones(16), 5]),
     (func11, [jnp.ones(16), 5.0]),
 ]
+
+
+@pytest.mark.parametrize("f, args", test_cases)
+def test_works(f, args):
+    _ = jpviz.draw(f, collapse_primitives=True)(*args)
+    _ = jpviz.draw(f, collapse_primitives=False)(*args)
