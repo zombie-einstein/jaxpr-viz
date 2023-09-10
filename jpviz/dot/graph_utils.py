@@ -235,6 +235,9 @@ def get_scan_arguments(
     carry_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_init", rank="same", label="init", style="dotted"
     )
+    iterate_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_iter", rank="same", label="iterate", style="dotted"
+    )
     argument_edges = list()
 
     for i, (var, p_var) in enumerate(zip(graph_invars, parent_invars)):
@@ -254,6 +257,10 @@ def get_scan_arguments(
 
         if n_const <= i < n_carry + n_const:
             carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
+        elif i >= n_carry + n_const:
+            iterate_nodes.add_node(
+                get_arg_node(arg_id, var, show_avals, var_is_literal)
+            )
         else:
             argument_nodes.add_node(
                 get_arg_node(arg_id, var, show_avals, var_is_literal)
@@ -262,6 +269,7 @@ def get_scan_arguments(
             argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
 
     argument_nodes.add_subgraph(carry_nodes)
+    argument_nodes.add_subgraph(iterate_nodes)
     return argument_nodes, argument_edges
 
 
@@ -392,6 +400,9 @@ def get_scan_outputs(
     carry_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_carry", rank="same", label="carry", style="dotted"
     )
+    accumulate_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_acc", rank="same", label="Accumulate", style="dotted"
+    )
     out_edges = list()
     out_nodes = list()
     id_edges = list()
@@ -406,9 +417,10 @@ def get_scan_outputs(
         if i < n_carry:
             carry_nodes.add_node(get_out_node(arg_id, var, show_avals))
         else:
-            out_graph.add_node(get_out_node(arg_id, var, show_avals))
+            accumulate_nodes.add_node(get_out_node(arg_id, var, show_avals))
         out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
         out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
 
     out_graph.add_subgraph(carry_nodes)
+    out_graph.add_subgraph(accumulate_nodes)
     return out_graph, out_edges, out_nodes, id_edges
