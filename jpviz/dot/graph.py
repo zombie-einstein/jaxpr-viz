@@ -18,9 +18,9 @@ sub_graph_return = typing.Tuple[
 def get_conditional(
     conditional: jax_core.Jaxpr,
     parent_id: str,
+    n: int,
     collapse_primitives: bool,
     show_avals: bool,
-    n: int,
 ) -> sub_graph_return:
     """
     Generate a subgraph representing a conditional function
@@ -432,6 +432,24 @@ def get_scan(
     return graph, argument_edges, out_nodes, out_edges, n
 
 
+def get_while(
+    eqn: jax_core.JaxprEqn,
+    parent_id: str,
+    n: int,
+    collapse_primitives: bool,
+    show_avals: bool,
+) -> sub_graph_return:
+
+    while_graph_id = f"{parent_id}_while_{n}"
+    for_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}", "while")
+    n = n + 1
+
+    cond_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}_cond", "cond")
+    body_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}_body", "body")
+
+    return for_graph, [], [], [], n
+
+
 def get_sub_graph(
     eqn: jax_core.JaxprEqn,
     parent_id: str,
@@ -506,9 +524,17 @@ def get_sub_graph(
     else:
         if eqn.primitive.name == "cond":
             # Return a conditional subgraph
-            return get_conditional(eqn, parent_id, collapse_primitives, show_avals, n)
+            return get_conditional(eqn, parent_id, n, collapse_primitives, show_avals)
         elif eqn.primitive.name == "scan":
             return get_scan(
+                eqn,
+                parent_id,
+                n,
+                collapse_primitives,
+                show_avals,
+            )
+        elif eqn.primitive.name == "while":
+            return get_while(
                 eqn,
                 parent_id,
                 n,
