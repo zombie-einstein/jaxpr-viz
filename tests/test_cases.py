@@ -80,7 +80,7 @@ test_cases = [
     (func4, [(jnp.zeros(8), jnp.ones(8))]),
     (one_of_three, [1, 5.0]),
     (func7, [5.0]),
-    (func8, [jnp.zeros(1), 2.0]),
+    (func8, [5.0, (jnp.zeros(1), 2.0)]),
     (func10, [jnp.ones(16), 5]),
     (func11, [jnp.ones(16), 5.0]),
 ]

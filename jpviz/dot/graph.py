@@ -96,20 +96,23 @@ def get_conditional(
     for i, branch in enumerate(conditional.params["branches"]):
         if len(branch.eqns) == 0:
             branch_graph_id = f"{cond_node_id}_branch_{i}"
+            label = f"Branch {i}"
+
             if collapse_primitives:
                 cond_graph.add_node(
                     pydot.Node(
                         name=branch_graph_id,
-                        label=f"Branch {i}: Id",
+                        label=label,
                         **styling.FUNCTION_NODE_STYLING,
                     )
                 )
-                for var in branch.jaxpr.invars:
+
+                for (var, p_var) in zip(branch.jaxpr.invars, conditional.invars[1:]):
                     # TODO: What does the underscore mean?
                     if str(var)[-1] == "_":
                         continue
                     cond_graph.add_edge(
-                        pydot.Edge(f"{cond_graph_id}_{var}", branch_graph_id)
+                        pydot.Edge(f"{cond_graph_id}_{p_var}", branch_graph_id)
                     )
                 for var in conditional.outvars:
                     cond_graph.add_edge(
@@ -117,14 +120,19 @@ def get_conditional(
                     )
             else:
                 branch_graph = graph_utils.get_subgraph(
-                    f"cluster_{branch_graph_id}", f"Branch {i}"
+                    f"cluster_{branch_graph_id}", label
                 )
-                for var, c_var in zip(branch.jaxpr.outvars, conditional.outvars):
+                for (var, p_var) in zip(branch.jaxpr.invars, conditional.invars[1:]):
+                    # TODO: What does the underscore mean?
+                    if str(var)[-1] == "_":
+                        continue
                     arg_id = f"{branch_graph_id}_{var}"
                     branch_graph.add_node(
                         graph_utils.get_var_node(arg_id, var, show_avals)
                     )
-                    cond_graph.add_edge(pydot.Edge(f"{cond_graph_id}_{var}", arg_id))
+                    cond_graph.add_edge(pydot.Edge(f"{cond_graph_id}_{p_var}", arg_id))
+                for var, c_var in zip(branch.jaxpr.outvars, conditional.outvars):
+                    arg_id = f"{branch_graph_id}_{var}"
                     cond_graph.add_edge(pydot.Edge(arg_id, f"{cond_graph_id}_{c_var}"))
                 cond_graph.add_subgraph(branch_graph)
         else:
@@ -137,7 +145,7 @@ def get_conditional(
                 branch_label = f"Branch {i}: {branch_label}"
                 collapse_branch = True
             else:
-                branch_label = f"Branch {i}: λ"
+                branch_label = f"Branch {i}"
                 collapse_branch = collapse_primitives
 
             if utils.contains_non_primitives(branch.eqns) or not collapse_branch:
@@ -147,6 +155,7 @@ def get_conditional(
                 branch_args, arg_edges = graph_utils.get_arguments(
                     branch_graph_id,
                     cond_graph_id,
+                    branch.jaxpr.constvars,
                     branch.jaxpr.invars,
                     conditional.invars[1:],
                     show_avals,
@@ -352,6 +361,7 @@ def expand_non_primitive(
         argument_nodes, argument_edges = graph_utils.get_arguments(
             graph_id,
             parent_id,
+            eqn.params["jaxpr"].jaxpr.constvars,
             eqn.params["jaxpr"].jaxpr.invars,
             eqn.invars,
             show_avals,
