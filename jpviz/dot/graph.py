@@ -143,7 +143,10 @@ def get_conditional(
                     eqn.params["name"] if "name" in eqn.params else eqn.primitive.name
                 )
                 branch_label = f"Branch {i}: {branch_label}"
-                collapse_branch = True
+                no_literal_inputs = any(
+                    [isinstance(a, jax_core.Literal) for a in branch.jaxpr.invars]
+                )
+                collapse_branch = no_literal_inputs or collapse_primitives
             else:
                 branch_label = f"Branch {i}"
                 collapse_branch = collapse_primitives
