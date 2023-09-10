@@ -16,6 +16,12 @@ LITERAL_STYLING = dict(
     fontname="Courier",
     fontsize="10",
 )
+CONST_ARG_STYLING = dict(
+    shape="box",
+    color="darkgreen",
+    fontname="Courier",
+    fontsize="10",
+)
 OUT_ARG_STYLING = dict(
     shape="box",
     color="red",

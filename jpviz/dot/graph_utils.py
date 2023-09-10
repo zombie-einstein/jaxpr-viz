@@ -20,7 +20,7 @@ def get_arg_node(
     arg_id: str
         Unique ID of the node
     var: jax._src.core.Var
-        JAX variable of literal instance
+        JAX variable or literal instance
     show_avals: bool
         If `True` show the type in the node
     is_literal: True
@@ -36,6 +36,34 @@ def get_arg_node(
         name=arg_id,
         label=utils.get_node_label(var, show_avals),
         **style,
+    )
+
+
+def get_const_node(
+    arg_id: str,
+    var: typing.Union[jax_core.Var, jax_core.Literal],
+    show_avals: bool,
+) -> pydot.Node:
+    """
+    Return a pydot node representing a function const arg
+
+    Parameters
+    ----------
+    arg_id: str
+        Unique ID of the node
+    var: jax._src.core.Var
+        JAX variable
+    show_avals: bool
+        If `True` show the type in the node
+
+    Returns
+    -------
+    pydot.Node
+    """
+    return pydot.Node(
+        name=arg_id,
+        label=utils.get_node_label(var, show_avals),
+        **styling.CONST_ARG_STYLING,
     )
 
 
@@ -113,6 +141,7 @@ def get_subgraph(graph_id: str, label: str) -> pydot.Subgraph:
 def get_arguments(
     graph_id: str,
     parent_id: str,
+    graph_consts: typing.List[jax_core.Var],
     graph_invars: typing.List[jax_core.Var],
     parent_invars: typing.List[jax_core.Var],
     show_avals: bool,
@@ -127,6 +156,8 @@ def get_arguments(
         ID of the subgraph that owns the arguments
     parent_id: str
         ID of the parent of the subgraph
+    graph_consts: List[jax._src.core.Var]
+        List of graph const-vars
     graph_invars: List[jax._src.core.Var]
         List of input variables to the subgraph
     parent_invars: List[jax._src.core.Var]
@@ -143,6 +174,10 @@ def get_arguments(
     """
     argument_nodes = pydot.Subgraph(f"{graph_id}_args", rank="same")
     argument_edges = list()
+
+    for var in graph_consts:
+        arg_id = f"{graph_id}_{var}"
+        argument_nodes.add_node(get_const_node(arg_id, var, show_avals))
 
     for var, p_var in zip(graph_invars, parent_invars):
         # TODO: What does the underscore mean?
@@ -200,6 +235,9 @@ def get_scan_arguments(
     carry_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_init", rank="same", label="init", style="dotted"
     )
+    iterate_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_iter", rank="same", label="iterate", style="dotted"
+    )
     argument_edges = list()
 
     for i, (var, p_var) in enumerate(zip(graph_invars, parent_invars)):
@@ -219,6 +257,10 @@ def get_scan_arguments(
 
         if n_const <= i < n_carry + n_const:
             carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
+        elif i >= n_carry + n_const:
+            iterate_nodes.add_node(
+                get_arg_node(arg_id, var, show_avals, var_is_literal)
+            )
         else:
             argument_nodes.add_node(
                 get_arg_node(arg_id, var, show_avals, var_is_literal)
@@ -227,6 +269,7 @@ def get_scan_arguments(
             argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
 
     argument_nodes.add_subgraph(carry_nodes)
+    argument_nodes.add_subgraph(iterate_nodes)
     return argument_nodes, argument_edges
 
 
@@ -357,6 +400,9 @@ def get_scan_outputs(
     carry_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_carry", rank="same", label="carry", style="dotted"
     )
+    accumulate_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_acc", rank="same", label="Accumulate", style="dotted"
+    )
     out_edges = list()
     out_nodes = list()
     id_edges = list()
@@ -371,9 +417,10 @@ def get_scan_outputs(
         if i < n_carry:
             carry_nodes.add_node(get_out_node(arg_id, var, show_avals))
         else:
-            out_graph.add_node(get_out_node(arg_id, var, show_avals))
+            accumulate_nodes.add_node(get_out_node(arg_id, var, show_avals))
         out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
         out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
 
     out_graph.add_subgraph(carry_nodes)
+    out_graph.add_subgraph(accumulate_nodes)
     return out_graph, out_edges, out_nodes, id_edges
