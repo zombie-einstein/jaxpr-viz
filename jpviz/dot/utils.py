@@ -57,4 +57,9 @@ def contains_non_primitives(eqns: typing.List[jax_core.JaxprEqn]) -> bool:
     bool:
         `True` if any of the sub-eqns are non-primitive
     """
-    return any([("jaxpr" in e.params or e.primitive.name == "cond") for e in eqns])
+    return any(
+        [
+            ("jaxpr" in e.params or e.primitive.name in {"cond", "scan", "while"})
+            for e in eqns
+        ]
+    )

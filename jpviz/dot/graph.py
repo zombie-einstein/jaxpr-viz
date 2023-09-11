@@ -441,13 +441,132 @@ def get_while(
 ) -> sub_graph_return:
 
     while_graph_id = f"{parent_id}_while_{n}"
-    for_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}", "while")
+    while_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}", "while")
     n = n + 1
 
-    cond_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}_cond", "cond")
-    body_graph = graph_utils.get_subgraph(f"cluster_{while_graph_id}_body", "body")
+    cond_graph_id = f"cluster_{while_graph_id}_cond"
+    body_graph_id = f"cluster_{while_graph_id}_body"
+    cond_graph = graph_utils.get_subgraph(cond_graph_id, "cond")
+    body_graph = graph_utils.get_subgraph(body_graph_id, "body")
+    n_cond_const = eqn.params["cond_nconsts"]
+    n_body_const = eqn.params["body_nconsts"]
+    cond_consts = eqn.invars[:n_cond_const]
+    body_consts = eqn.invars[n_cond_const : n_cond_const + n_body_const]
+    init_carry = eqn.invars[n_cond_const + n_body_const :]
 
-    return for_graph, [], [], [], n
+    cond_jaxpr = eqn.params["cond_jaxpr"]
+    body_jaxpr = eqn.params["body_jaxpr"]
+
+    arg_edges = list()
+    out_edges = list()
+
+    for var in eqn.invars:
+        arg_id = f"{while_graph_id}_{var}"
+        is_literal = isinstance(var, jax_core.Literal)
+        while_graph.add_node(
+            graph_utils.get_arg_node(arg_id, var, show_avals, is_literal)
+        )
+        if not is_literal:
+            arg_edges.append(pydot.Edge(f"{parent_id}_{var}", arg_id))
+
+    arg_nodes, cond_edges = graph_utils.get_arguments(
+        cond_graph_id,
+        while_graph_id,
+        [],
+        cond_jaxpr.jaxpr.invars,
+        cond_consts + init_carry,
+        show_avals,
+    )
+    cond_graph.add_subgraph(arg_nodes)
+    for e in cond_edges:
+        while_graph.add_edge(e)
+
+    arg_nodes, body_edges = graph_utils.get_arguments(
+        body_graph_id,
+        while_graph_id,
+        [],
+        body_jaxpr.jaxpr.invars,
+        body_consts + init_carry,
+        show_avals,
+    )
+    body_graph.add_subgraph(arg_nodes)
+    for e in body_edges:
+        while_graph.add_edge(e)
+
+    for body_eqn in body_jaxpr.jaxpr.eqns:
+        (
+            body_sub_graph,
+            body_arg_edges,
+            body_out_nodes,
+            body_out_edges,
+            n,
+        ) = get_sub_graph(body_eqn, body_graph_id, n, collapse_primitives, show_avals)
+        if isinstance(body_sub_graph, pydot.Subgraph):
+            body_graph.add_subgraph(body_sub_graph)
+        else:
+            body_graph.add_node(body_sub_graph)
+        for edge in body_arg_edges:
+            body_graph.add_edge(edge)
+        for node in body_out_nodes:
+            body_graph.add_node(node)
+        for edge in body_out_edges:
+            body_graph.add_edge(edge)
+
+    for cond_eqn in cond_jaxpr.jaxpr.eqns:
+        (
+            cond_sub_graph,
+            cond_arg_edges,
+            cond_out_nodes,
+            cond_out_edges,
+            n,
+        ) = get_sub_graph(cond_eqn, cond_graph_id, n, collapse_primitives, show_avals)
+        if isinstance(cond_sub_graph, pydot.Subgraph):
+            cond_graph.add_subgraph(cond_sub_graph)
+        else:
+            cond_graph.add_node(cond_sub_graph)
+        for edge in cond_arg_edges:
+            cond_graph.add_edge(edge)
+        for node in cond_out_nodes:
+            cond_graph.add_node(node)
+        for edge in cond_out_edges:
+            cond_graph.add_edge(edge)
+
+    cond_out_graph, _, _, cond_id_edges = graph_utils.get_outputs(
+        cond_graph_id,
+        while_graph_id,
+        cond_jaxpr.jaxpr.invars,
+        cond_jaxpr.jaxpr.outvars,
+        eqn.outvars,
+        show_avals,
+    )
+    cond_graph.add_subgraph(cond_out_graph)
+    for e in cond_id_edges:
+        cond_graph.add_edge(e)
+
+    body_out_graph, body_out_edges, _, body_id_edges = graph_utils.get_outputs(
+        body_graph_id,
+        while_graph_id,
+        body_jaxpr.jaxpr.invars,
+        body_jaxpr.jaxpr.outvars,
+        eqn.outvars,
+        show_avals,
+    )
+    body_graph.add_subgraph(body_out_graph)
+    for e in body_out_edges:
+        while_graph.add_edge(e)
+    for e in body_id_edges:
+        body_graph.add_edge(e)
+
+    while_graph.add_subgraph(cond_graph)
+    while_graph.add_subgraph(body_graph)
+
+    for var in eqn.outvars:
+        arg_id = f"{while_graph_id}_{var}"
+        while_graph.add_node(graph_utils.get_out_node(arg_id, var, show_avals))
+        if not isinstance(var, jax_core.DropVar):
+            out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{var}"))
+
+    return while_graph, arg_edges, [], out_edges, n
 
 
 def get_sub_graph(
