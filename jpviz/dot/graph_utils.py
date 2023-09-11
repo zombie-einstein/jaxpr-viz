@@ -172,7 +172,9 @@ def get_arguments(
         edges that connect variables in the parent graph to
         the inputs of this subgraph.
     """
-    argument_nodes = pydot.Subgraph(f"{graph_id}_args", rank="same")
+    argument_nodes = pydot.Subgraph(
+        f"{graph_id}_args", rank="same", label="", style="invis"
+    )
     argument_edges = list()
 
     for var in graph_consts:
@@ -322,7 +324,7 @@ def get_outputs(
             - A list of edges that connect inputs directly to outputs
               in the case an argument is returned by the function
     """
-    out_graph = pydot.Subgraph(f"{graph_id}_outs", rank="same")
+    out_graph = pydot.Subgraph(f"{graph_id}_outs", rank="same", label="", style="invis")
     out_edges = list()
     out_nodes = list()
     id_edges = list()
