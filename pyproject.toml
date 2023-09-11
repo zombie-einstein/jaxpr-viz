@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jpviz"
-version = "0.1.4"
+version = "0.1.5"
 description = "Jaxpr Visualisation Tool"
 authors = ["zombie-einstein"]
 readme = "README.md"

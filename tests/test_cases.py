@@ -90,6 +90,6 @@ test_cases = [
 
 
 @pytest.mark.parametrize("f, args", test_cases)
-def test_works(f, args):
-    _ = jpviz.draw(f, collapse_primitives=True)(*args)
-    _ = jpviz.draw(f, collapse_primitives=False)(*args)
+@pytest.mark.parametrize("collapse_primitives", [True, False])
+def test_works(f, args, collapse_primitives):
+    _ = jpviz.draw(f, collapse_primitives=collapse_primitives)(*args)
