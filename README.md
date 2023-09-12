@@ -9,7 +9,8 @@ low-level for some use-cases.
 The intention of this package is to visualise how
 sub-functions are connected in JAX programs. It does
 this by converting the [JaxPr](https://jax.readthedocs.io/en/latest/jaxpr.html)
-representation into a pydot graph.
+representation into a pydot graph. See [here](.github/docs/gallery.md)
+for examples.
 
 > **NOTE:** This project is still at an early stage and may not
 > support all JAX functionality (or permutations thereof). If you spot
@@ -116,32 +117,10 @@ produces
 > JAX unpacks arguments/outputs to tuples they do correspond
 > to the positioning of arguments and outputs.
 
+## Examples
+
+See [here](.github/docs/gallery.md) for more examples of rendered computation graphs.
+
 ## Developers
 
-Dependencies can be installed with [poetry](https://python-poetry.org/) by running
-
-```bash
-poetry install
-```
-
-### Pre-Commit Hooks
-
-Pre commit hooks can be installed by running
-
-```bash
-pre-commit install
-```
-
-Pre-commit checks can then be run using
-
-```bash
-task lint
-```
-
-### Tests
-
-Tests can be run with
-
-```bash
-task test
-```
+Developer notes can be found [here](.github/docs/developers.md).

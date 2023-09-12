@@ -96,7 +96,7 @@ def get_conditional(
     for i, branch in enumerate(conditional.params["branches"]):
         if len(branch.eqns) == 0:
             branch_graph_id = f"{cond_node_id}_branch_{i}"
-            label = f"Branch {i}"
+            label = f"branch {i}"
 
             if collapse_primitives:
                 cond_graph.add_node(
@@ -142,13 +142,16 @@ def get_conditional(
                 branch_label = (
                     eqn.params["name"] if "name" in eqn.params else eqn.primitive.name
                 )
-                branch_label = f"Branch {i}: {branch_label}"
                 no_literal_inputs = any(
                     [isinstance(a, jax_core.Literal) for a in branch.jaxpr.invars]
                 )
                 collapse_branch = no_literal_inputs or collapse_primitives
+                if collapse_branch:
+                    branch_label = f"branch {i}: {branch_label}"
+                else:
+                    branch_label = f"branch {i}"
             else:
-                branch_label = f"Branch {i}"
+                branch_label = f"branch {i}"
                 collapse_branch = collapse_primitives
 
             if utils.contains_non_primitives(branch.eqns) or not collapse_branch:
@@ -331,7 +334,6 @@ def expand_non_primitive(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
-    is_scan: bool = False,
 ) -> sub_graph_return:
     """
     Expand a JaxprEqn into a computation graph/
@@ -351,8 +353,6 @@ def expand_non_primitive(
     show_avals: bool
         If `True` the type of the data is shown on
         argument/variable nodes on the generated graph
-    is_scan: bool
-        Should be `True` if the function primitive is 'scan'
 
     Returns
     -------
@@ -384,25 +384,14 @@ def expand_non_primitive(
         **styling.GRAPH_STYLING,
     )
 
-    if is_scan:
-        argument_nodes, argument_edges = graph_utils.get_scan_arguments(
-            graph_id,
-            parent_id,
-            eqn.params["jaxpr"].jaxpr.invars,
-            eqn.invars,
-            eqn.params["num_consts"],
-            eqn.params["num_carry"],
-            show_avals,
-        )
-    else:
-        argument_nodes, argument_edges = graph_utils.get_arguments(
-            graph_id,
-            parent_id,
-            eqn.params["jaxpr"].jaxpr.constvars,
-            eqn.params["jaxpr"].jaxpr.invars,
-            eqn.invars,
-            show_avals,
-        )
+    argument_nodes, argument_edges = graph_utils.get_arguments(
+        graph_id,
+        parent_id,
+        eqn.params["jaxpr"].jaxpr.constvars,
+        eqn.params["jaxpr"].jaxpr.invars,
+        eqn.invars,
+        show_avals,
+    )
     graph.add_subgraph(argument_nodes)
 
     for sub_eqn in eqn.params["jaxpr"].jaxpr.eqns:
@@ -420,25 +409,14 @@ def expand_non_primitive(
         for edge in out_edges:
             graph.add_edge(edge)
 
-    if is_scan:
-        output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_scan_outputs(
-            graph_id,
-            parent_id,
-            eqn.params["jaxpr"].jaxpr.invars,
-            eqn.params["jaxpr"].jaxpr.outvars,
-            eqn.outvars,
-            eqn.params["num_carry"],
-            show_avals,
-        )
-    else:
-        output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_outputs(
-            graph_id,
-            parent_id,
-            eqn.params["jaxpr"].jaxpr.invars,
-            eqn.params["jaxpr"].jaxpr.outvars,
-            eqn.outvars,
-            show_avals,
-        )
+    output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_outputs(
+        graph_id,
+        parent_id,
+        eqn.params["jaxpr"].jaxpr.invars,
+        eqn.params["jaxpr"].jaxpr.outvars,
+        eqn.outvars,
+        show_avals,
+    )
 
     graph.add_subgraph(output_nodes)
     for edge in id_edges:
@@ -454,15 +432,99 @@ def get_scan(
     collapse_primitives: bool,
     show_avals: bool,
 ) -> sub_graph_return:
-    graph, argument_edges, out_nodes, out_edges, n = expand_non_primitive(
-        eqn,
-        parent_id,
-        n,
-        collapse_primitives,
-        show_avals,
-        is_scan=True,
+
+    graph_name = "scan"
+    graph_id = f"{graph_name}_{n}"
+    n = n + 1
+
+    graph = pydot.Subgraph(
+        f"cluster_{graph_id}",
+        rank="same",
+        label=graph_name,
+        **styling.GRAPH_STYLING,
     )
-    graph.set_label(f"scan ({eqn.params['length']})")
+
+    argument_nodes, argument_edges = graph_utils.get_scan_arguments(
+        graph_id,
+        parent_id,
+        eqn.params["jaxpr"].jaxpr.invars,
+        eqn.invars,
+        eqn.params["num_consts"],
+        eqn.params["num_carry"],
+        show_avals,
+    )
+    graph.add_subgraph(argument_nodes)
+
+    out_var_keys = set(f"{graph_id}_{v}" for v in eqn.params["jaxpr"].jaxpr.outvars)
+    eqns = eqn.params["jaxpr"].jaxpr.eqns
+
+    body_graph_id = f"cluster_{graph_id}_body"
+
+    if collapse_primitives and not utils.contains_non_primitives(eqns):
+        body_in = set()
+        body_out = set()
+
+        for sub_eqn in eqns:
+            body_in.update([str(v) for v in sub_eqn.invars])
+            body_out.update([str(v) for v in sub_eqn.outvars])
+
+        parent_in = set(str(v) for v in eqn.params["jaxpr"].jaxpr.invars)
+        parent_out = set(str(v) for v in eqn.params["jaxpr"].jaxpr.outvars)
+
+        body_in = body_in.intersection(parent_in)
+        body_out = body_out.intersection(parent_out)
+
+        body_graph = pydot.Node(
+            name=graph_id,
+            label="body",
+            **styling.FUNCTION_NODE_STYLING,
+        )
+        graph.add_node(body_graph)
+
+        for v in body_in:
+            graph.add_edge(pydot.Edge(f"{graph_id}_{v}", graph_id))
+        for v in body_out:
+            graph.add_edge(pydot.Edge(graph_id, f"{graph_id}_{v}"))
+    else:
+        body_graph = pydot.Subgraph(
+            body_graph_id,
+            rank="same",
+            label="body",
+            **styling.GRAPH_STYLING,
+        )
+
+        for sub_eqn in eqns:
+            sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
+                sub_eqn, graph_id, n, collapse_primitives, show_avals
+            )
+            if isinstance(sub_graph, pydot.Subgraph):
+                body_graph.add_subgraph(sub_graph)
+            else:
+                body_graph.add_node(sub_graph)
+            for edge in in_edges:
+                graph.add_edge(edge)
+            for node in out_nodes:
+                if not node.get_name() in out_var_keys:
+                    body_graph.add_node(node)
+            for edge in out_edges:
+                graph.add_edge(edge)
+
+        graph.add_subgraph(body_graph)
+
+    output_nodes, out_edges, out_nodes, id_edges = graph_utils.get_scan_outputs(
+        graph_id,
+        parent_id,
+        eqn.params["jaxpr"].jaxpr.invars,
+        eqn.params["jaxpr"].jaxpr.outvars,
+        eqn.outvars,
+        eqn.params["num_carry"],
+        show_avals,
+    )
+
+    graph.add_subgraph(output_nodes)
+    for edge in id_edges:
+        graph.add_edge(edge)
+
     return graph, argument_edges, out_nodes, out_edges, n
 
 

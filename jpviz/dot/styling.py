@@ -3,6 +3,7 @@ GRAPH_STYLING = dict(
     fontsize="12",
     style="dotted",
     labeljust="l",
+    nodesep=0.05,
 )
 IN_ARG_STYLING = dict(
     shape="box",
@@ -49,3 +50,4 @@ COND_NODE_STYLING = dict(
 FUNCTION_NODE_STYLING = dict(
     shape="rectangle", fontname="Courier", fontsize="10", style="dotted"
 )
+ARG_SUBGRAPH_STYLING = dict(label="", style="invis")
