@@ -1,5 +1,10 @@
 # Gallery
 
+Examples of computation graphs visualised using
+`jaxpr-viz`.
+The setting of `collapse_primitives` used is also included
+(see [here](../../README.md#collapse-nodes) for an explanation).
+
 ## Simple Function
 
 ```python
@@ -9,7 +14,7 @@ def func1(first, second):
     return jnp.sum(temp)
 ```
 
-![func1](.github/images/gallery/func1.png)
+![func1](../images/gallery/func1.png)
 
 ## One of Three (Switch)
 
@@ -25,7 +30,7 @@ def one_of_three(index, arg):
     )
 ```
 
-![one_of_three](.github/images/gallery/one_of_three.png)
+![one_of_three](../images/gallery/one_of_three.png)
 
 ## Binary Switch
 
@@ -42,7 +47,7 @@ def func7(arg):
     )
 ```
 
-![func7](.github/images/gallery/func7.png)
+![func7](../images/gallery/func7.png)
 
 ## Switch with Tuple
 
@@ -59,7 +64,7 @@ def func8(arg1, arg2):
     )
 ```
 
-![func8](.github/images/gallery/func8.png)
+![func8](../images/gallery/func8.png)
 
 ## For i Loop
 
@@ -74,7 +79,7 @@ def func10(arg, n):
     )
 ```
 
-![func10](.github/images/gallery/func10.png)
+![func10](../images/gallery/func10.png)
 
 ## Scan
 
@@ -92,4 +97,4 @@ def func11(arr, extra):
     return jax.lax.scan(body, 0.0, (arr, ones))
 ```
 
-![func11](.github/images/gallery/func11.png)
+![func11](../images/gallery/func11.png)
