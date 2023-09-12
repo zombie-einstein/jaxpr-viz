@@ -173,7 +173,7 @@ def get_arguments(
         the inputs of this subgraph.
     """
     argument_nodes = pydot.Subgraph(
-        f"{graph_id}_args", rank="same", label="", style="invis"
+        f"{graph_id}_args", rank="same", **styling.ARG_SUBGRAPH_STYLING
     )
     argument_edges = list()
 
@@ -232,10 +232,13 @@ def get_scan_arguments(
         the inputs of this subgraph.
     """
     argument_nodes = pydot.Subgraph(
-        f"cluster_{graph_id}_args", rank="same", label="", style="invis"
+        f"cluster_{graph_id}_args", rank="min", **styling.ARG_SUBGRAPH_STYLING
+    )
+    const_nodes = pydot.Subgraph(
+        f"cluster_{graph_id}_const", rank="same", label="init", style="dotted"
     )
     carry_nodes = pydot.Subgraph(
-        f"cluster_{graph_id}_init", rank="same", label="init", style="dotted"
+        f"cluster_{graph_id}_init", rank="same", label="consts", style="dotted"
     )
     iterate_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_iter", rank="same", label="iterate", style="dotted"
@@ -257,19 +260,19 @@ def get_scan_arguments(
             argument_nodes.add_node(get_arg_node(literal_id, p_var, show_avals, True))
             argument_nodes.add_edge(pydot.Edge(literal_id, arg_id))
 
-        if n_const <= i < n_carry + n_const:
+        if i < n_const:
+            const_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
+        elif i < n_carry + n_const:
             carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
-        elif i >= n_carry + n_const:
+        else:
             iterate_nodes.add_node(
                 get_arg_node(arg_id, var, show_avals, var_is_literal)
             )
-        else:
-            argument_nodes.add_node(
-                get_arg_node(arg_id, var, show_avals, var_is_literal)
-            )
+
         if not is_literal:
             argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
 
+    argument_nodes.add_subgraph(const_nodes)
     argument_nodes.add_subgraph(carry_nodes)
     argument_nodes.add_subgraph(iterate_nodes)
     return argument_nodes, argument_edges
@@ -324,7 +327,9 @@ def get_outputs(
             - A list of edges that connect inputs directly to outputs
               in the case an argument is returned by the function
     """
-    out_graph = pydot.Subgraph(f"{graph_id}_outs", rank="same", label="", style="invis")
+    out_graph = pydot.Subgraph(
+        f"{graph_id}_outs", rank="same", **styling.ARG_SUBGRAPH_STYLING
+    )
     out_edges = list()
     out_nodes = list()
     id_edges = list()
@@ -397,13 +402,13 @@ def get_scan_outputs(
               in the case an argument is returned by the function
     """
     out_graph = pydot.Subgraph(
-        f"cluster_{graph_id}_outs", rank="same", label="", style="invis"
+        f"cluster_{graph_id}_outs", rank="same", **styling.ARG_SUBGRAPH_STYLING
     )
     carry_nodes = pydot.Subgraph(
         f"cluster_{graph_id}_carry", rank="same", label="carry", style="dotted"
     )
     accumulate_nodes = pydot.Subgraph(
-        f"cluster_{graph_id}_acc", rank="same", label="Accumulate", style="dotted"
+        f"cluster_{graph_id}_acc", rank="same", label="accumulate", style="dotted"
     )
     out_edges = list()
     out_nodes = list()
