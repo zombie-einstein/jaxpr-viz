@@ -4,6 +4,7 @@ version = "0.1.6"
 description = "Jaxpr Visualisation Tool"
 authors = ["zombie-einstein"]
 readme = "README.md"
+license = { file = "LICENSE" }
 packages = [{include = "jpviz"}]
 homepage = ""
 repository = "https://github.com/zombie-einstein/jaxpr-viz"
