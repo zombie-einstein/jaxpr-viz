@@ -178,18 +178,18 @@ def get_arguments(
     argument_edges = list()
 
     for var in graph_consts:
-        arg_id = f"{graph_id}_{var}"
+        arg_id = f"{graph_id}_{id(var)}"
         argument_nodes.add_node(get_const_node(arg_id, var, show_avals))
 
     for var, p_var in zip(graph_invars, parent_invars):
         # TODO: What does the underscore mean?
         if str(var)[-1] == "_":
             continue
-        arg_id = f"{graph_id}_{var}"
+        arg_id = f"{graph_id}_{id(var)}"
         is_literal = isinstance(var, jax_core.Literal)
         argument_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
+            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
     return argument_nodes, argument_edges
 
@@ -249,7 +249,7 @@ def get_scan_arguments(
         # TODO: What does the underscore mean?
         if str(var)[-1] == "_":
             continue
-        arg_id = f"{graph_id}_{var}"
+        arg_id = f"{graph_id}_{id(var)}"
 
         var_is_literal = isinstance(var, jax_core.Literal)
         parent_is_literal = isinstance(p_var, jax_core.Literal)
@@ -270,7 +270,7 @@ def get_scan_arguments(
             )
 
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
+            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
     argument_nodes.add_subgraph(const_nodes)
     argument_nodes.add_subgraph(carry_nodes)
@@ -337,13 +337,13 @@ def get_outputs(
 
     for var, p_var in zip(graph_outvars, parent_outvars):
         if str(var) in in_var_set:
-            arg_id = f"{graph_id}_{var}_out"
-            id_edges.append(pydot.Edge(f"{graph_id}_{var}", arg_id))
+            arg_id = f"{graph_id}_{id(var)}_out"
+            id_edges.append(pydot.Edge(f"{graph_id}_{id(var)}", arg_id))
         else:
-            arg_id = f"{graph_id}_{var}"
+            arg_id = f"{graph_id}_{id(var)}"
         out_graph.add_node(get_out_node(arg_id, var, show_avals))
-        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
-        out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{id(p_var)}"))
+        out_nodes.append(get_var_node(f"{parent_id}_{id(p_var)}", p_var, show_avals))
 
     return out_graph, out_edges, out_nodes, id_edges
 
@@ -413,20 +413,20 @@ def get_scan_outputs(
     out_edges = list()
     out_nodes = list()
     id_edges = list()
-    in_var_set = set([str(x) for x in graph_invars])
+    in_var_set = set([id(x) for x in graph_invars])
 
     for i, (var, p_var) in enumerate(zip(graph_outvars, parent_outvars)):
-        if str(var) in in_var_set:
-            arg_id = f"{graph_id}_{var}_out"
-            id_edges.append(pydot.Edge(f"{graph_id}_{var}", arg_id))
+        if id(var) in in_var_set:
+            arg_id = f"{graph_id}_{id(var)}_out"
+            id_edges.append(pydot.Edge(f"{graph_id}_{id(var)}", arg_id))
         else:
-            arg_id = f"{graph_id}_{var}"
+            arg_id = f"{graph_id}_{id(var)}"
         if i < n_carry:
             carry_nodes.add_node(get_out_node(arg_id, var, show_avals))
         else:
             accumulate_nodes.add_node(get_out_node(arg_id, var, show_avals))
-        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
-        out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{id(p_var)}"))
+        out_nodes.append(get_var_node(f"{parent_id}_{id(p_var)}", p_var, show_avals))
 
     out_graph.add_subgraph(carry_nodes)
     out_graph.add_subgraph(accumulate_nodes)
