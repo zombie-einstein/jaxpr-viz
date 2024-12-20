@@ -21,6 +21,7 @@ def get_conditional(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
     """
     Generate a subgraph representing a conditional function
@@ -40,6 +41,8 @@ def get_conditional(
     n: int
         Integer used to generate unique ids for nodes, incremented
         as new nodes are added
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -79,7 +82,7 @@ def get_conditional(
     cond_var_id = f"{parent_id}_{id(cond_var)}"
     if isinstance(cond_var, jax_core.Literal):
         new_nodes.append(
-            graph_utils.get_arg_node(cond_var_id, cond_var, show_avals, True)
+            graph_utils.get_arg_node(cond_var_id, cond_var, show_avals, True, id_map)
         )
     in_edges.append(pydot.Edge(cond_var_id, cond_node_id))
 
@@ -87,7 +90,7 @@ def get_conditional(
         arg_id = f"{cond_graph_id}_{id(arg)}"
         is_literal = isinstance(arg, jax_core.Literal)
         cond_arguments.add_node(
-            graph_utils.get_arg_node(arg_id, arg, show_avals, is_literal)
+            graph_utils.get_arg_node(arg_id, arg, show_avals, is_literal, id_map)
         )
         in_edges.append(pydot.Edge(f"{parent_id}_{id(arg)}", arg_id))
 
@@ -128,7 +131,7 @@ def get_conditional(
                         continue
                     arg_id = f"{branch_graph_id}_{id(var)}"
                     branch_graph.add_node(
-                        graph_utils.get_var_node(arg_id, var, show_avals)
+                        graph_utils.get_var_node(arg_id, var, show_avals, id_map)
                     )
                     cond_graph.add_edge(
                         pydot.Edge(f"{cond_graph_id}_{id(p_var)}", arg_id)
@@ -169,6 +172,7 @@ def get_conditional(
                     branch.jaxpr.invars,
                     conditional.invars[1:],
                     show_avals,
+                    id_map,
                 )
                 for edge in arg_edges:
                     cond_graph.add_edge(edge)
@@ -187,6 +191,7 @@ def get_conditional(
                         n,
                         collapse_primitives,
                         show_avals,
+                        id_map,
                     )
                     if isinstance(eqn_graph, pydot.Subgraph):
                         branch_graph.add_subgraph(eqn_graph)
@@ -211,6 +216,7 @@ def get_conditional(
                     branch.jaxpr.outvars,
                     conditional.outvars,
                     show_avals,
+                    id_map,
                 )
                 branch_graph.add_subgraph(branch_out_graph)
                 for edge in branch_out_edges:
@@ -252,6 +258,7 @@ def get_conditional(
         conditional.outvars,
         conditional.outvars,
         show_avals,
+        id_map,
     )
     cond_graph.add_subgraph(cond_out_graph)
     out_edges.extend(cond_out_edges)
@@ -266,6 +273,7 @@ def _get_node(
     show_avals: bool,
     n: int,
     is_primitive: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
     """
     Generate a node representing a function and edges connecting it
@@ -285,6 +293,8 @@ def _get_node(
         as new nodes are added
     is_primitive: bool
         Should be `True` if the function is a JAX primitive
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -320,13 +330,15 @@ def _get_node(
     for var in eqn.invars:
         if isinstance(var, jax_core.Literal):
             new_nodes.append(
-                graph_utils.get_arg_node(f"{graph_id}_{id(var)}", var, show_avals, True)
+                graph_utils.get_arg_node(
+                    f"{graph_id}_{id(var)}", var, show_avals, True, id_map
+                )
             )
         in_edges.append(pydot.Edge(f"{graph_id}_{id(var)}", node_id))
 
     for var in eqn.outvars:
         var_id = f"{graph_id}_{id(var)}"
-        new_nodes.append(graph_utils.get_var_node(var_id, var, show_avals))
+        new_nodes.append(graph_utils.get_var_node(var_id, var, show_avals, id_map))
         out_edges.append(pydot.Edge(node_id, var_id))
 
     return node, in_edges, new_nodes, out_edges, n
@@ -338,6 +350,7 @@ def expand_non_primitive(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
     """
     Expand a JaxprEqn into a computation graph/
@@ -357,6 +370,8 @@ def expand_non_primitive(
     show_avals: bool
         If `True` the type of the data is shown on
         argument/variable nodes on the generated graph
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -395,12 +410,13 @@ def expand_non_primitive(
         eqn.params["jaxpr"].jaxpr.invars,
         eqn.invars,
         show_avals,
+        id_map,
     )
     graph.add_subgraph(argument_nodes)
 
     for sub_eqn in eqn.params["jaxpr"].jaxpr.eqns:
         sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
-            sub_eqn, graph_id, n, collapse_primitives, show_avals
+            sub_eqn, graph_id, n, collapse_primitives, show_avals, id_map
         )
         if isinstance(sub_graph, pydot.Subgraph):
             graph.add_subgraph(sub_graph)
@@ -420,6 +436,7 @@ def expand_non_primitive(
         eqn.params["jaxpr"].jaxpr.outvars,
         eqn.outvars,
         show_avals,
+        id_map,
     )
 
     graph.add_subgraph(output_nodes)
@@ -435,6 +452,7 @@ def get_scan(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
 
     graph_name = "scan"
@@ -456,6 +474,7 @@ def get_scan(
         eqn.params["num_consts"],
         eqn.params["num_carry"],
         show_avals,
+        id_map,
     )
     graph.add_subgraph(argument_nodes)
 
@@ -499,7 +518,7 @@ def get_scan(
 
         for sub_eqn in eqns:
             sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
-                sub_eqn, graph_id, n, collapse_primitives, show_avals
+                sub_eqn, graph_id, n, collapse_primitives, show_avals, id_map
             )
             if isinstance(sub_graph, pydot.Subgraph):
                 body_graph.add_subgraph(sub_graph)
@@ -523,6 +542,7 @@ def get_scan(
         eqn.outvars,
         eqn.params["num_carry"],
         show_avals,
+        id_map,
     )
 
     graph.add_subgraph(output_nodes)
@@ -541,6 +561,7 @@ def get_while_branch(
     n: int,
     show_avals: bool,
     collapse_primitives: bool,
+    id_map: utils.IdMap,
 ) -> typing.Tuple[
     typing.Union[pydot.Subgraph, pydot.Node],
     typing.List[pydot.Edge],
@@ -581,6 +602,7 @@ def get_while_branch(
             jaxpr.invars,
             parent_args,
             show_avals,
+            id_map,
         )
         graph.add_subgraph(arg_nodes)
 
@@ -591,7 +613,7 @@ def get_while_branch(
                 out_nodes,
                 out_edges,
                 n,
-            ) = get_sub_graph(eqn, graph_id, n, collapse_primitives, show_avals)
+            ) = get_sub_graph(eqn, graph_id, n, collapse_primitives, show_avals, id_map)
             if isinstance(sub_graph, pydot.Subgraph):
                 graph.add_subgraph(sub_graph)
             else:
@@ -610,6 +632,7 @@ def get_while_branch(
             jaxpr.outvars,
             parent_outvars,
             show_avals,
+            id_map,
         )
         graph.add_subgraph(out_nodes)
         for e in id_edges:
@@ -624,6 +647,7 @@ def get_while(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
 
     while_graph_id = f"{parent_id}_while_{n}"
@@ -643,7 +667,7 @@ def get_while(
         arg_id = f"{while_graph_id}_{id(var)}"
         is_literal = isinstance(var, jax_core.Literal)
         while_graph.add_node(
-            graph_utils.get_arg_node(arg_id, var, show_avals, is_literal)
+            graph_utils.get_arg_node(arg_id, var, show_avals, is_literal, id_map)
         )
         if not is_literal:
             arg_edges.append(pydot.Edge(f"{parent_id}_{id(var)}", arg_id))
@@ -657,6 +681,7 @@ def get_while(
         n,
         show_avals,
         collapse_primitives,
+        id_map,
     )
     for e in cond_arg_edges:
         while_graph.add_edge(e)
@@ -670,6 +695,7 @@ def get_while(
         n,
         show_avals,
         collapse_primitives,
+        id_map,
     )
     for e in body_arg_edges:
         while_graph.add_edge(e)
@@ -687,7 +713,7 @@ def get_while(
 
     for var in eqn.outvars:
         arg_id = f"{while_graph_id}_{id(var)}"
-        while_graph.add_node(graph_utils.get_out_node(arg_id, var, show_avals))
+        while_graph.add_node(graph_utils.get_out_node(arg_id, var, show_avals, id_map))
         if not isinstance(var, jax_core.DropVar):
             out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{id(var)}"))
 
@@ -700,6 +726,7 @@ def get_sub_graph(
     n: int,
     collapse_primitives: bool,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> sub_graph_return:
     """
     Generate a node/subgraph representing a function
@@ -723,6 +750,8 @@ def get_sub_graph(
     show_avals: bool
         If `True` the type of the data is shown on
         argument/variable nodes on the generated graph
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -755,6 +784,7 @@ def get_sub_graph(
                 n,
                 collapse_primitives,
                 show_avals,
+                id_map,
             )
         else:
             # Return a node representing a function
@@ -764,11 +794,14 @@ def get_sub_graph(
                 show_avals,
                 n,
                 False,
+                id_map,
             )
     else:
         if eqn.primitive.name == "cond":
             # Return a conditional subgraph
-            return get_conditional(eqn, parent_id, n, collapse_primitives, show_avals)
+            return get_conditional(
+                eqn, parent_id, n, collapse_primitives, show_avals, id_map
+            )
         elif eqn.primitive.name == "scan":
             return get_scan(
                 eqn,
@@ -776,6 +809,7 @@ def get_sub_graph(
                 n,
                 collapse_primitives,
                 show_avals,
+                id_map,
             )
         elif eqn.primitive.name == "while":
             return get_while(
@@ -784,6 +818,7 @@ def get_sub_graph(
                 n,
                 collapse_primitives,
                 show_avals,
+                id_map,
             )
         else:
             # Return a primitive node
@@ -793,4 +828,5 @@ def get_sub_graph(
                 show_avals,
                 n,
                 True,
+                id_map,
             )
