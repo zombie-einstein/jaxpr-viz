@@ -11,6 +11,7 @@ def get_arg_node(
     var: typing.Union[jax_core.Var, jax_core.Literal],
     show_avals: bool,
     is_literal: bool,
+    id_map: utils.IdMap,
 ) -> pydot.Node:
     """
     Return a pydot node representing a function input/argument
@@ -26,6 +27,8 @@ def get_arg_node(
     is_literal: True
         Should be `True` if the node is a literal (and
         should be styled as such)
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -34,7 +37,7 @@ def get_arg_node(
     style = styling.LITERAL_STYLING if is_literal else styling.IN_ARG_STYLING
     return pydot.Node(
         name=arg_id,
-        label=utils.get_node_label(var, show_avals),
+        label=utils.get_node_label(var, show_avals, id_map),
         **style,
     )
 
@@ -43,6 +46,7 @@ def get_const_node(
     arg_id: str,
     var: typing.Union[jax_core.Var, jax_core.Literal],
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> pydot.Node:
     """
     Return a pydot node representing a function const arg
@@ -55,6 +59,8 @@ def get_const_node(
         JAX variable
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -62,12 +68,14 @@ def get_const_node(
     """
     return pydot.Node(
         name=arg_id,
-        label=utils.get_node_label(var, show_avals),
+        label=utils.get_node_label(var, show_avals, id_map),
         **styling.CONST_ARG_STYLING,
     )
 
 
-def get_var_node(var_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node:
+def get_var_node(
+    var_id: str, var: jax_core.Var, show_avals: bool, id_map: utils.IdMap
+) -> pydot.Node:
     """
     Get a pydot node representing a variable internal to a function
 
@@ -79,6 +87,8 @@ def get_var_node(var_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node
         JAX variable instance
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -86,12 +96,14 @@ def get_var_node(var_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node
     """
     return pydot.Node(
         name=var_id,
-        label=utils.get_node_label(var, show_avals),
+        label=utils.get_node_label(var, show_avals, id_map),
         **styling.VAR_STYLING,
     )
 
 
-def get_out_node(out_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node:
+def get_out_node(
+    out_id: str, var: jax_core.Var, show_avals: bool, id_map: utils.IdMap
+) -> pydot.Node:
     """
     Get a pydot node representing the outputs of a function
 
@@ -103,6 +115,8 @@ def get_out_node(out_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node
         JAX variable instance
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -110,7 +124,7 @@ def get_out_node(out_id: str, var: jax_core.Var, show_avals: bool) -> pydot.Node
     """
     return pydot.Node(
         name=out_id,
-        label=utils.get_node_label(var, show_avals),
+        label=utils.get_node_label(var, show_avals, id_map),
         **styling.OUT_ARG_STYLING,
     )
 
@@ -145,6 +159,7 @@ def get_arguments(
     graph_invars: typing.List[jax_core.Var],
     parent_invars: typing.List[jax_core.Var],
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
     """
     Generate a subgraph containing arguments, and edges connecting
@@ -164,6 +179,8 @@ def get_arguments(
         List of the corresponding input variables from the parent subgraph
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -178,18 +195,20 @@ def get_arguments(
     argument_edges = list()
 
     for var in graph_consts:
-        arg_id = f"{graph_id}_{var}"
-        argument_nodes.add_node(get_const_node(arg_id, var, show_avals))
+        arg_id = f"{graph_id}_{id(var)}"
+        argument_nodes.add_node(get_const_node(arg_id, var, show_avals, id_map))
 
     for var, p_var in zip(graph_invars, parent_invars):
         # TODO: What does the underscore mean?
         if str(var)[-1] == "_":
             continue
-        arg_id = f"{graph_id}_{var}"
+        arg_id = f"{graph_id}_{id(var)}"
         is_literal = isinstance(var, jax_core.Literal)
-        argument_nodes.add_node(get_arg_node(arg_id, var, show_avals, is_literal))
+        argument_nodes.add_node(
+            get_arg_node(arg_id, var, show_avals, is_literal, id_map)
+        )
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
+            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
     return argument_nodes, argument_edges
 
@@ -202,6 +221,7 @@ def get_scan_arguments(
     n_const: int,
     n_carry: int,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
     """
     Generate a subgraph containing arguments, and edges connecting
@@ -223,6 +243,8 @@ def get_scan_arguments(
         Number of scan carry arguments
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -249,7 +271,7 @@ def get_scan_arguments(
         # TODO: What does the underscore mean?
         if str(var)[-1] == "_":
             continue
-        arg_id = f"{graph_id}_{var}"
+        arg_id = f"{graph_id}_{id(var)}"
 
         var_is_literal = isinstance(var, jax_core.Literal)
         parent_is_literal = isinstance(p_var, jax_core.Literal)
@@ -257,20 +279,26 @@ def get_scan_arguments(
 
         if parent_is_literal:
             literal_id = f"{arg_id}_lit"
-            argument_nodes.add_node(get_arg_node(literal_id, p_var, show_avals, True))
+            argument_nodes.add_node(
+                get_arg_node(literal_id, p_var, show_avals, True, id_map)
+            )
             argument_nodes.add_edge(pydot.Edge(literal_id, arg_id))
 
         if i < n_const:
-            const_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
+            const_nodes.add_node(
+                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
+            )
         elif i < n_carry + n_const:
-            carry_nodes.add_node(get_arg_node(arg_id, var, show_avals, var_is_literal))
+            carry_nodes.add_node(
+                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
+            )
         else:
             iterate_nodes.add_node(
-                get_arg_node(arg_id, var, show_avals, var_is_literal)
+                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
             )
 
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{p_var}", arg_id))
+            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
     argument_nodes.add_subgraph(const_nodes)
     argument_nodes.add_subgraph(carry_nodes)
@@ -285,6 +313,7 @@ def get_outputs(
     graph_outvars: typing.List[jax_core.Var],
     parent_outvars: typing.List[jax_core.Var],
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> typing.Tuple[
     pydot.Subgraph,
     typing.List[pydot.Edge],
@@ -310,6 +339,8 @@ def get_outputs(
         graph that are outputs from this graph
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -337,13 +368,15 @@ def get_outputs(
 
     for var, p_var in zip(graph_outvars, parent_outvars):
         if str(var) in in_var_set:
-            arg_id = f"{graph_id}_{var}_out"
-            id_edges.append(pydot.Edge(f"{graph_id}_{var}", arg_id))
+            arg_id = f"{graph_id}_{id(var)}_out"
+            id_edges.append(pydot.Edge(f"{graph_id}_{id(var)}", arg_id))
         else:
-            arg_id = f"{graph_id}_{var}"
-        out_graph.add_node(get_out_node(arg_id, var, show_avals))
-        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
-        out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
+            arg_id = f"{graph_id}_{id(var)}"
+        out_graph.add_node(get_out_node(arg_id, var, show_avals, id_map))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{id(p_var)}"))
+        out_nodes.append(
+            get_var_node(f"{parent_id}_{id(p_var)}", p_var, show_avals, id_map)
+        )
 
     return out_graph, out_edges, out_nodes, id_edges
 
@@ -356,6 +389,7 @@ def get_scan_outputs(
     parent_outvars: typing.List[jax_core.Var],
     n_carry: int,
     show_avals: bool,
+    id_map: utils.IdMap,
 ) -> typing.Tuple[
     pydot.Subgraph,
     typing.List[pydot.Edge],
@@ -384,6 +418,8 @@ def get_scan_outputs(
         Number of scan carry arguments
     show_avals: bool
         If `True` show the type in the node
+    id_map: IdMap
+        Node id to label map
 
     Returns
     -------
@@ -413,20 +449,22 @@ def get_scan_outputs(
     out_edges = list()
     out_nodes = list()
     id_edges = list()
-    in_var_set = set([str(x) for x in graph_invars])
+    in_var_set = set([id(x) for x in graph_invars])
 
     for i, (var, p_var) in enumerate(zip(graph_outvars, parent_outvars)):
-        if str(var) in in_var_set:
-            arg_id = f"{graph_id}_{var}_out"
-            id_edges.append(pydot.Edge(f"{graph_id}_{var}", arg_id))
+        if id(var) in in_var_set:
+            arg_id = f"{graph_id}_{id(var)}_out"
+            id_edges.append(pydot.Edge(f"{graph_id}_{id(var)}", arg_id))
         else:
-            arg_id = f"{graph_id}_{var}"
+            arg_id = f"{graph_id}_{id(var)}"
         if i < n_carry:
-            carry_nodes.add_node(get_out_node(arg_id, var, show_avals))
+            carry_nodes.add_node(get_out_node(arg_id, var, show_avals, id_map))
         else:
-            accumulate_nodes.add_node(get_out_node(arg_id, var, show_avals))
-        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{p_var}"))
-        out_nodes.append(get_var_node(f"{parent_id}_{p_var}", p_var, show_avals))
+            accumulate_nodes.add_node(get_out_node(arg_id, var, show_avals, id_map))
+        out_edges.append(pydot.Edge(arg_id, f"{parent_id}_{id(p_var)}"))
+        out_nodes.append(
+            get_var_node(f"{parent_id}_{id(p_var)}", p_var, show_avals, id_map)
+        )
 
     out_graph.add_subgraph(carry_nodes)
     out_graph.add_subgraph(accumulate_nodes)

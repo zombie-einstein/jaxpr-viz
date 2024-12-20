@@ -1,7 +1,7 @@
 import pydot
 from jax._src import core as jax_core
 
-from . import graph
+from . import graph, utils
 
 
 def draw_dot_graph(
@@ -26,9 +26,9 @@ def draw_dot_graph(
     """
 
     g = pydot.Dot(graph_type="digraph")
-
+    id_map = utils.IdMap()
     sub_graph, _, _, _, _ = graph.get_sub_graph(
-        fn.eqns[0], "", 0, collapse_primitives, show_avals
+        fn.eqns[0], "", 0, collapse_primitives, show_avals, id_map
     )
     if isinstance(sub_graph, pydot.Subgraph):
         g.add_subgraph(sub_graph)
