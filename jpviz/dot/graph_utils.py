@@ -160,7 +160,7 @@ def get_arguments(
     parent_invars: typing.List[jax_core.Var],
     show_avals: bool,
     id_map: utils.IdMap,
-) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
+) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge], typing.List[pydot.Node]]:
     """
     Generate a subgraph containing arguments, and edges connecting
     it to its parent graph
@@ -193,24 +193,27 @@ def get_arguments(
         f"{graph_id}_args", rank="same", **styling.ARG_SUBGRAPH_STYLING
     )
     argument_edges = list()
+    parent_nodes = list()
 
     for var in graph_consts:
         arg_id = f"{graph_id}_{id(var)}"
         argument_nodes.add_node(get_const_node(arg_id, var, show_avals, id_map))
 
     for var, p_var in zip(graph_invars, parent_invars):
-        # TODO: What does the underscore mean?
-        if str(var)[-1] == "_":
-            continue
         arg_id = f"{graph_id}_{id(var)}"
         is_literal = isinstance(var, jax_core.Literal)
         argument_nodes.add_node(
             get_arg_node(arg_id, var, show_avals, is_literal, id_map)
         )
+        parent_id = f"{parent_id}_{id(p_var)}"
+        parent_is_literal = isinstance(p_var, jax_core.Literal)
+        parent_nodes.append(
+            get_arg_node(parent_id, p_var, show_avals, parent_is_literal, id_map)
+        )
         if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
+            argument_edges.append(pydot.Edge(parent_id, arg_id))
 
-    return argument_nodes, argument_edges
+    return argument_nodes, argument_edges, parent_nodes
 
 
 def get_scan_arguments(
@@ -268,11 +271,7 @@ def get_scan_arguments(
     argument_edges = list()
 
     for i, (var, p_var) in enumerate(zip(graph_invars, parent_invars)):
-        # TODO: What does the underscore mean?
-        if str(var)[-1] == "_":
-            continue
         arg_id = f"{graph_id}_{id(var)}"
-
         var_is_literal = isinstance(var, jax_core.Literal)
         parent_is_literal = isinstance(p_var, jax_core.Literal)
         is_literal = var_is_literal or parent_is_literal

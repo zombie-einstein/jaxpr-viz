@@ -111,9 +111,6 @@ def get_conditional(
                 )
 
                 for (var, p_var) in zip(branch.jaxpr.invars, conditional.invars[1:]):
-                    # TODO: What does the underscore mean?
-                    if str(var)[-1] == "_":
-                        continue
                     cond_graph.add_edge(
                         pydot.Edge(f"{cond_graph_id}_{id(p_var)}", branch_graph_id)
                     )
@@ -126,9 +123,6 @@ def get_conditional(
                     f"cluster_{branch_graph_id}", label
                 )
                 for (var, p_var) in zip(branch.jaxpr.invars, conditional.invars[1:]):
-                    # TODO: What does the underscore mean?
-                    if str(var)[-1] == "_":
-                        continue
                     arg_id = f"{branch_graph_id}_{id(var)}"
                     branch_graph.add_node(
                         graph_utils.get_var_node(arg_id, var, show_avals, id_map)
@@ -165,7 +159,7 @@ def get_conditional(
                 branch_graph = graph_utils.get_subgraph(
                     f"cluster_{branch_graph_id}", branch_label
                 )
-                branch_args, arg_edges = graph_utils.get_arguments(
+                branch_args, arg_edges, _ = graph_utils.get_arguments(
                     branch_graph_id,
                     cond_graph_id,
                     branch.jaxpr.constvars,
@@ -403,7 +397,7 @@ def expand_non_primitive(
         **styling.GRAPH_STYLING,
     )
 
-    argument_nodes, argument_edges = graph_utils.get_arguments(
+    argument_nodes, argument_edges, parent_nodes = graph_utils.get_arguments(
         graph_id,
         parent_id,
         eqn.params["jaxpr"].jaxpr.constvars,
@@ -442,6 +436,8 @@ def expand_non_primitive(
     graph.add_subgraph(output_nodes)
     for edge in id_edges:
         graph.add_edge(edge)
+
+    out_nodes = out_nodes + parent_nodes
 
     return graph, argument_edges, out_nodes, out_edges, n
 
@@ -595,7 +591,7 @@ def get_while_branch(
         return graph, arg_edges, out_edges, n
     else:
         graph = graph_utils.get_subgraph(graph_id, label)
-        arg_nodes, outer_arg_edges = graph_utils.get_arguments(
+        arg_nodes, outer_arg_edges, _ = graph_utils.get_arguments(
             graph_id,
             parent_id,
             [],
