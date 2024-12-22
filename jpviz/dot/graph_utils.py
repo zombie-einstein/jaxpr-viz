@@ -1,4 +1,4 @@
-import typing
+from typing import List, Tuple, Union
 
 import pydot
 from jax._src import core as jax_core
@@ -8,7 +8,7 @@ from . import styling, utils
 
 def get_arg_node(
     arg_id: str,
-    var: typing.Union[jax_core.Var, jax_core.Literal],
+    var: Union[jax_core.Var, jax_core.Literal],
     show_avals: bool,
     is_literal: bool,
     id_map: utils.IdMap,
@@ -44,7 +44,7 @@ def get_arg_node(
 
 def get_const_node(
     arg_id: str,
-    var: typing.Union[jax_core.Var, jax_core.Literal],
+    var: Union[jax_core.Var, jax_core.Literal],
     show_avals: bool,
     id_map: utils.IdMap,
 ) -> pydot.Node:
@@ -155,12 +155,12 @@ def get_subgraph(graph_id: str, label: str) -> pydot.Subgraph:
 def get_arguments(
     graph_id: str,
     parent_id: str,
-    graph_consts: typing.List[jax_core.Var],
-    graph_invars: typing.List[jax_core.Var],
-    parent_invars: typing.List[jax_core.Var],
+    graph_consts: List[jax_core.Var],
+    graph_invars: List[jax_core.Var],
+    parent_invars: List[jax_core.Var],
     show_avals: bool,
     id_map: utils.IdMap,
-) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge], typing.List[pydot.Node]]:
+) -> Tuple[List[pydot.Node], List[pydot.Edge]]:
     """
     Generate a subgraph containing arguments, and edges connecting
     it to its parent graph
@@ -189,43 +189,38 @@ def get_arguments(
         edges that connect variables in the parent graph to
         the inputs of this subgraph.
     """
-    argument_nodes = pydot.Subgraph(
-        f"{graph_id}_args", rank="same", **styling.ARG_SUBGRAPH_STYLING
-    )
-    argument_edges = list()
-    parent_nodes = list()
+    argument_nodes: List[pydot.Node] = list()
+    argument_edges: List[pydot.Edge] = list()
 
     for var in graph_consts:
         arg_id = f"{graph_id}_{id(var)}"
-        argument_nodes.add_node(get_const_node(arg_id, var, show_avals, id_map))
+        argument_nodes.append(get_const_node(arg_id, var, show_avals, id_map))
 
-    for var, p_var in zip(graph_invars, parent_invars):
+    for p_var, var in zip(parent_invars, graph_invars):
         arg_id = f"{graph_id}_{id(var)}"
-        is_literal = isinstance(var, jax_core.Literal)
-        argument_nodes.add_node(
-            get_arg_node(arg_id, var, show_avals, is_literal, id_map)
-        )
-        parent_id = f"{parent_id}_{id(p_var)}"
-        parent_is_literal = isinstance(p_var, jax_core.Literal)
-        parent_nodes.append(
-            get_arg_node(parent_id, p_var, show_avals, parent_is_literal, id_map)
-        )
-        if not is_literal:
-            argument_edges.append(pydot.Edge(parent_id, arg_id))
+        if isinstance(p_var, jax_core.Literal):
+            argument_nodes.append(get_arg_node(arg_id, p_var, show_avals, True, id_map))
+        else:
+            is_literal = isinstance(var, jax_core.Literal)
+            argument_nodes.append(
+                get_arg_node(arg_id, var, show_avals, is_literal, id_map)
+            )
+            if not is_literal:
+                argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
-    return argument_nodes, argument_edges, parent_nodes
+    return argument_nodes, argument_edges
 
 
 def get_scan_arguments(
     graph_id: str,
     parent_id: str,
-    graph_invars: typing.List[jax_core.Var],
-    parent_invars: typing.List[jax_core.Var],
+    graph_invars: List[jax_core.Var],
+    parent_invars: List[jax_core.Var],
     n_const: int,
     n_carry: int,
     show_avals: bool,
     id_map: utils.IdMap,
-) -> typing.Tuple[pydot.Subgraph, typing.List[pydot.Edge]]:
+) -> Tuple[pydot.Subgraph, List[pydot.Edge]]:
     """
     Generate a subgraph containing arguments, and edges connecting
     it to its parent graph. Groups scan init/carry nodes.
@@ -274,51 +269,36 @@ def get_scan_arguments(
         arg_id = f"{graph_id}_{id(var)}"
         var_is_literal = isinstance(var, jax_core.Literal)
         parent_is_literal = isinstance(p_var, jax_core.Literal)
-        is_literal = var_is_literal or parent_is_literal
 
         if parent_is_literal:
-            literal_id = f"{arg_id}_lit"
-            argument_nodes.add_node(
-                get_arg_node(literal_id, p_var, show_avals, True, id_map)
-            )
-            argument_nodes.add_edge(pydot.Edge(literal_id, arg_id))
+            node = get_arg_node(arg_id, p_var, show_avals, True, id_map)
+        else:
+            node = get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
+            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
 
         if i < n_const:
-            const_nodes.add_node(
-                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
-            )
+            const_nodes.add_node(node)
         elif i < n_carry + n_const:
-            carry_nodes.add_node(
-                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
-            )
+            carry_nodes.add_node(node)
         else:
-            iterate_nodes.add_node(
-                get_arg_node(arg_id, var, show_avals, var_is_literal, id_map)
-            )
-
-        if not is_literal:
-            argument_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", arg_id))
+            iterate_nodes.add_node(node)
 
     argument_nodes.add_subgraph(const_nodes)
     argument_nodes.add_subgraph(carry_nodes)
     argument_nodes.add_subgraph(iterate_nodes)
+
     return argument_nodes, argument_edges
 
 
 def get_outputs(
     graph_id: str,
     parent_id: str,
-    graph_invars: typing.List[jax_core.Var],
-    graph_outvars: typing.List[jax_core.Var],
-    parent_outvars: typing.List[jax_core.Var],
+    graph_invars: List[jax_core.Var],
+    graph_outvars: List[jax_core.Var],
+    parent_outvars: List[jax_core.Var],
     show_avals: bool,
     id_map: utils.IdMap,
-) -> typing.Tuple[
-    pydot.Subgraph,
-    typing.List[pydot.Edge],
-    typing.List[pydot.Node],
-    typing.List[pydot.Edge],
-]:
+) -> Tuple[pydot.Subgraph, List[pydot.Edge], List[pydot.Node], List[pydot.Edge]]:
     """
     Generate a subgraph containing function output nodes, and
     edges and nodes that connect outputs to the parent graph
@@ -383,18 +363,13 @@ def get_outputs(
 def get_scan_outputs(
     graph_id: str,
     parent_id: str,
-    graph_invars: typing.List[jax_core.Var],
-    graph_outvars: typing.List[jax_core.Var],
-    parent_outvars: typing.List[jax_core.Var],
+    graph_invars: List[jax_core.Var],
+    graph_outvars: List[jax_core.Var],
+    parent_outvars: List[jax_core.Var],
     n_carry: int,
     show_avals: bool,
     id_map: utils.IdMap,
-) -> typing.Tuple[
-    pydot.Subgraph,
-    typing.List[pydot.Edge],
-    typing.List[pydot.Node],
-    typing.List[pydot.Edge],
-]:
+) -> Tuple[pydot.Subgraph, List[pydot.Edge], List[pydot.Node], List[pydot.Edge]]:
     """
     Generate a subgraph containing function output nodes, and
     edges and nodes that connect outputs to the parent graph.

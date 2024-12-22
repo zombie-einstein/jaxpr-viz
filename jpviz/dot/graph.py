@@ -159,7 +159,12 @@ def get_conditional(
                 branch_graph = graph_utils.get_subgraph(
                     f"cluster_{branch_graph_id}", branch_label
                 )
-                branch_args, arg_edges, _ = graph_utils.get_arguments(
+                branch_args = pydot.Subgraph(
+                    f"{branch_graph_id}_args",
+                    rank="same",
+                    **styling.ARG_SUBGRAPH_STYLING,
+                )
+                args_nodes, arg_edges = graph_utils.get_arguments(
                     branch_graph_id,
                     cond_graph_id,
                     branch.jaxpr.constvars,
@@ -168,6 +173,8 @@ def get_conditional(
                     show_avals,
                     id_map,
                 )
+                for node in args_nodes:
+                    branch_args.add_node(node)
                 for edge in arg_edges:
                     cond_graph.add_edge(edge)
                 branch_graph.add_subgraph(branch_args)
@@ -230,11 +237,6 @@ def get_conditional(
                     )
                 )
                 for (var, p_var) in zip(branch.jaxpr.invars, conditional.invars[1:]):
-                    # TODO: What does the underscore mean?
-
-                    if str(var)[-1] == "_":
-                        continue
-
                     if not is_literal:
                         cond_graph.add_edge(
                             pydot.Edge(f"{cond_graph_id}_{id(p_var)}", branch_graph_id)
@@ -396,8 +398,10 @@ def expand_non_primitive(
         label=graph_name,
         **styling.GRAPH_STYLING,
     )
-
-    argument_nodes, argument_edges, parent_nodes = graph_utils.get_arguments(
+    argument_nodes_sub = pydot.Subgraph(
+        f"{graph_id}_args", rank="same", **styling.ARG_SUBGRAPH_STYLING
+    )
+    argument_nodes, argument_edges = graph_utils.get_arguments(
         graph_id,
         parent_id,
         eqn.params["jaxpr"].jaxpr.constvars,
@@ -406,7 +410,9 @@ def expand_non_primitive(
         show_avals,
         id_map,
     )
-    graph.add_subgraph(argument_nodes)
+    for node in argument_nodes:
+        argument_nodes_sub.add_node(node)
+    graph.add_subgraph(argument_nodes_sub)
 
     for sub_eqn in eqn.params["jaxpr"].jaxpr.eqns:
         sub_graph, in_edges, out_nodes, out_edges, n = get_sub_graph(
@@ -437,7 +443,7 @@ def expand_non_primitive(
     for edge in id_edges:
         graph.add_edge(edge)
 
-    out_nodes = out_nodes + parent_nodes
+    out_nodes = out_nodes
 
     return graph, argument_edges, out_nodes, out_edges, n
 
@@ -576,10 +582,7 @@ def get_while_branch(
         out_edges = list()
 
         for (var, p_var) in zip(jaxpr.invars, parent_args):
-            # TODO: What does the underscore mean?
-            if str(var)[-1] == "_":
-                continue
-            is_literal = isinstance(var, jax_core.Literal)
+            is_literal = isinstance(p_var, jax_core.Literal)
             if not is_literal:
                 arg_edges.append(pydot.Edge(f"{parent_id}_{id(p_var)}", graph_id))
 
@@ -591,7 +594,10 @@ def get_while_branch(
         return graph, arg_edges, out_edges, n
     else:
         graph = graph_utils.get_subgraph(graph_id, label)
-        arg_nodes, outer_arg_edges, _ = graph_utils.get_arguments(
+        arg_nodes_sub = pydot.Subgraph(
+            f"{graph_id}_args", rank="same", **styling.ARG_SUBGRAPH_STYLING
+        )
+        arg_nodes, outer_arg_edges = graph_utils.get_arguments(
             graph_id,
             parent_id,
             [],
@@ -600,7 +606,9 @@ def get_while_branch(
             show_avals,
             id_map,
         )
-        graph.add_subgraph(arg_nodes)
+        for node in arg_nodes:
+            arg_nodes_sub.add_node(node)
+        graph.add_subgraph(arg_nodes_sub)
 
         for eqn in jaxpr.eqns:
             (
